@@ -9,12 +9,18 @@ import (
 	"github.com/example/summary-tasks-bot/internal/repository"
 )
 
-type UserService struct {
-	repo repository.UserSettingsRepository
+// AIClient describes the part of the OpenAI client used by the service.
+type AIClient interface {
+	ChatCompletion(ctx context.Context, prompt string) (string, error)
 }
 
-func NewUserService(repo repository.UserSettingsRepository) *UserService {
-	return &UserService{repo: repo}
+type UserService struct {
+	repo   repository.UserSettingsRepository
+	openai AIClient
+}
+
+func NewUserService(repo repository.UserSettingsRepository, ai AIClient) *UserService {
+	return &UserService{repo: repo, openai: ai}
 }
 
 // Start activates a user with default topics.
@@ -43,10 +49,13 @@ func (s *UserService) Stop(ctx context.Context, userID int64) error {
 	return s.repo.Save(ctx, settings)
 }
 
-// GetNews returns a stubbed news string for topics.
+// GetNews returns news about the provided topics using the OpenAI API.
 func (s *UserService) GetNews(ctx context.Context, topics []string) (string, error) {
-	// In real implementation we would query an API.
-	return fmt.Sprintf("Latest news about %s", strings.Join(topics, ", ")), nil
+	prompt := fmt.Sprintf("Give me the latest news about %s in two sentences.", strings.Join(topics, ", "))
+	if s.openai == nil {
+		return fmt.Sprintf("Latest news about %s", strings.Join(topics, ", ")), nil
+	}
+	return s.openai.ChatCompletion(ctx, prompt)
 }
 
 // ActiveUsers returns all active users.

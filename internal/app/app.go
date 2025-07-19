@@ -11,24 +11,28 @@ import (
 
 	"github.com/example/summary-tasks-bot/internal/repository"
 	"github.com/example/summary-tasks-bot/internal/service"
+	"github.com/example/summary-tasks-bot/pkg/openai"
 	"github.com/example/summary-tasks-bot/pkg/telegram"
 )
 
 // App coordinates the services and telegram client.
 type App struct {
-	token       string
 	repo        repository.UserSettingsRepository
 	userService *service.UserService
-	client      *telegram.Client
+	tgClient    *telegram.Client
+	aiClient    *openai.Client
 }
 
-func New(token string, repo repository.UserSettingsRepository) *App {
-	return &App{token: token, repo: repo}
+func New(telegramToken string, aiToken string, repo repository.UserSettingsRepository) *App {
+	return &App{
+		repo:     repo,
+		tgClient: telegram.NewClient(telegramToken),
+		aiClient: openai.NewClient(aiToken),
+	}
 }
 
 func (a *App) Run(ctx context.Context) error {
-	a.client = telegram.NewClient(a.token)
-	a.userService = service.NewUserService(a.repo)
+	a.userService = service.NewUserService(a.repo, a.aiClient)
 
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
 	defer stop()
@@ -55,7 +59,7 @@ func (a *App) Run(ctx context.Context) error {
 func (a *App) handleUpdates(ctx context.Context) {
 	offset := 0
 	for {
-		updates, err := a.client.GetUpdates(ctx, offset)
+		updates, err := a.tgClient.GetUpdates(ctx, offset)
 		if err != nil {
 			log.Println("get updates:", err)
 			time.Sleep(time.Second)
@@ -77,13 +81,13 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 		if err := a.userService.Start(ctx, m.Chat.ID); err != nil {
 			log.Println("start:", err)
 		} else {
-			a.client.SendMessage(ctx, m.Chat.ID, "Welcome! Use /update_topics to set topics.")
+			a.tgClient.SendMessage(ctx, m.Chat.ID, "Welcome! Use /update_topics to set topics.")
 		}
 	case "/stop":
 		if err := a.userService.Stop(ctx, m.Chat.ID); err != nil {
 			log.Println("stop:", err)
 		} else {
-			a.client.SendMessage(ctx, m.Chat.ID, "Stopped updates")
+			a.tgClient.SendMessage(ctx, m.Chat.ID, "Stopped updates")
 		}
 	default:
 		if strings.HasPrefix(m.Text, "/update_topics ") {
@@ -91,7 +95,7 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 			if err := a.userService.UpdateTopics(ctx, m.Chat.ID, topics); err != nil {
 				log.Println("update_topics:", err)
 			} else {
-				a.client.SendMessage(ctx, m.Chat.ID, "Topics updated")
+				a.tgClient.SendMessage(ctx, m.Chat.ID, "Topics updated")
 			}
 		}
 	}
@@ -116,7 +120,7 @@ func (a *App) scheduleMessages(ctx context.Context) {
 					log.Println("get news:", err)
 					continue
 				}
-				a.client.SendMessage(ctx, u.UserID, msg)
+				a.tgClient.SendMessage(ctx, u.UserID, msg)
 			}
 		}
 	}
