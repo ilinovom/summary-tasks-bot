@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -86,6 +87,8 @@ func New(cfg *config.Config, repo repository.UserSettingsRepository) *App {
 func (a *App) Run(ctx context.Context) error {
 	a.userService = service.NewUserService(a.repo, a.aiClient, a.cfg.Prompt)
 
+	a.setCommands(ctx)
+
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
 	defer stop()
 
@@ -165,10 +168,19 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 		}
 		a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
 	default:
-		if strings.HasPrefix(m.Text, "/update_topics ") {
-			topics := strings.Fields(m.Text[len("/update_topics "):])
+		if strings.HasPrefix(m.Text, "/update_topics") {
+			topics := strings.Fields(strings.TrimPrefix(m.Text, "/update_topics"))
+			if len(topics) > 0 && topics[0] == "" {
+				topics = topics[1:]
+			}
 			if err := a.userService.UpdateTopics(ctx, m.Chat.ID, topics); err != nil {
-				log.Println("update_topics:", err)
+				if errors.Is(err, os.ErrNotExist) {
+					a.convs[m.Chat.ID] = &conversationState{Stage: stageInfoTypes}
+					prompt := "Какую информацию вы хотели бы получать?\n" + formatOptions(a.infoOptions) + "\nВведите номера через запятую (не более 5)."
+					a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, nil)
+				} else {
+					log.Println("update_topics:", err)
+				}
 			} else {
 				a.tgClient.SendMessage(ctx, m.Chat.ID, "Topics updated", nil)
 			}
@@ -198,6 +210,18 @@ func (a *App) scheduleMessages(ctx context.Context) {
 				a.tgClient.SendMessage(ctx, u.UserID, msg, nil)
 			}
 		}
+	}
+}
+
+func (a *App) setCommands(ctx context.Context) {
+	cmds := []telegram.BotCommand{
+		{Command: "start", Description: "Start interaction"},
+		{Command: "update_topics", Description: "Update your topics"},
+		{Command: "get_news_now", Description: "Get news immediately"},
+		{Command: "stop", Description: "Stop receiving updates"},
+	}
+	if err := a.tgClient.SetCommands(ctx, cmds); err != nil {
+		log.Println("set commands:", err)
 	}
 }
 

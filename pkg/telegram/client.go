@@ -33,6 +33,12 @@ type Client struct {
 	httpClient *http.Client
 }
 
+// BotCommand describes a bot command for the Telegram menu.
+type BotCommand struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+}
+
 func NewClient(token string) *Client {
 	return &Client{
 		token:      token,
@@ -106,4 +112,27 @@ func (c *Client) GetUpdates(ctx context.Context, offset int) ([]Update, error) {
 		return nil, errors.New("telegram: api responded with not ok")
 	}
 	return wrapper.Result, nil
+}
+
+// SetCommands registers the bot commands shown in the Telegram UI.
+func (c *Client) SetCommands(ctx context.Context, commands []BotCommand) error {
+	body := map[string]any{"commands": commands}
+	b, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url("setMyCommands"), bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return errors.New("telegram: unexpected status " + resp.Status)
+	}
+	return nil
 }

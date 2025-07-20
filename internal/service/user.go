@@ -66,10 +66,28 @@ func (s *UserService) GetNews(ctx context.Context, u *model.UserSettings) (strin
 	prompt = strings.ReplaceAll(prompt, "{категория}", category)
 	prompt = strings.ReplaceAll(prompt, "{тон}", s.prompt.Style)
 	prompt = strings.ReplaceAll(prompt, "{объём}", s.prompt.Volume)
+	var resp string
+	var err error
 	if s.openai == nil {
-		return prompt, nil
+		resp = prompt
+	} else {
+		resp, err = s.openai.ChatCompletion(ctx, prompt)
+		if err != nil {
+			return "", err
+		}
 	}
-	return s.openai.ChatCompletion(ctx, prompt)
+	prefixParts := []string{}
+	if info != "" {
+		prefixParts = append(prefixParts, "Тип: "+info)
+	}
+	if category != "" {
+		prefixParts = append(prefixParts, "Категория: "+category)
+	}
+	prefix := strings.Join(prefixParts, "\n")
+	if prefix != "" {
+		prefix += "\n\n"
+	}
+	return prefix + resp, nil
 }
 
 // ActiveUsers returns all active users.
