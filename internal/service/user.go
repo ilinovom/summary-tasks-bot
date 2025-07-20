@@ -50,10 +50,20 @@ func (s *UserService) Stop(ctx context.Context, userID int64) error {
 }
 
 // GetNews returns news about the provided topics using the OpenAI API.
-func (s *UserService) GetNews(ctx context.Context, topics []string) (string, error) {
-	prompt := fmt.Sprintf("Give me the latest news about %s in two sentences.", strings.Join(topics, ", "))
+func (s *UserService) GetNews(ctx context.Context, u *model.UserSettings) (string, error) {
+	parts := []string{}
+	if len(u.InfoTypes) > 0 {
+		parts = append(parts, strings.Join(u.InfoTypes, ", "))
+	}
+	if len(u.Categories) > 0 {
+		parts = append(parts, strings.Join(u.Categories, ", "))
+	}
+	if len(u.Topics) > 0 {
+		parts = append(parts, strings.Join(u.Topics, ", "))
+	}
+	prompt := fmt.Sprintf("Give me the latest %s in two sentences.", strings.Join(parts, ", "))
 	if s.openai == nil {
-		return fmt.Sprintf("Latest news about %s", strings.Join(topics, ", ")), nil
+		return "Latest " + strings.Join(parts, ", "), nil
 	}
 	return s.openai.ChatCompletion(ctx, prompt)
 }
