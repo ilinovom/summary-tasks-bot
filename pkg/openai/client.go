@@ -14,10 +14,13 @@ type Client struct {
 	httpClient *http.Client
 }
 
-func NewClient(token string) *Client {
+func NewClient(token, baseURL string) *Client {
+	if baseURL == "" {
+		baseURL = "https://api.openai.com/v1"
+	}
 	return &Client{
 		token:      token,
-		baseURL:    "https://api.openai.com/v1",
+		baseURL:    baseURL,
 		httpClient: http.DefaultClient,
 	}
 }

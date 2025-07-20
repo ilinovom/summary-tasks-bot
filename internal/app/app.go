@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/example/summary-tasks-bot/internal/config"
 	"github.com/example/summary-tasks-bot/internal/model"
 	"github.com/example/summary-tasks-bot/internal/repository"
 	"github.com/example/summary-tasks-bot/internal/service"
@@ -30,36 +31,6 @@ type conversationState struct {
 	Stage      convStage
 	InfoTypes  []string
 	Categories []string
-}
-
-var infoOptions = []string{
-	"Инсайты / Мыслеформы",
-	"Интересные факты",
-	"Проблемы, которые ждут решения",
-	"Бизнес-идеи / модели / форматы",
-	"Сводка трендов / новостей",
-	"Альтернативные взгляды на привычные вещи",
-	"Истории провалов и взлётов",
-	"Вопросы для самоанализа и мышления",
-	"Кейсы / разборы чужих продуктов",
-	"Технологические находки",
-	"Социальные, культурные, психологические сдвиги",
-	"Наблюдения за повседневностью",
-}
-
-var categoryOptions = []string{
-	"🚀 Бизнес и стартапы",
-	"🧠 Психология и мышление",
-	"🔧 Боли и проблемы",
-	"🌐 Технологии",
-	"📚 Образование и навыки",
-	"🏙 Общество и культура",
-	"🌱 Экология и устойчивость",
-	"💡 Необычные идеи",
-	"📦 Бизнес-платформы и сервисы",
-	"📊 Цифры и сравнения",
-	"❓ Вопрос дня",
-	"🤖 Пример использования GPT / AI",
 }
 
 func formatOptions(opts []string) string {
@@ -90,19 +61,23 @@ func parseSelection(text string, opts []string, limit int) []string {
 
 // App coordinates the services and telegram client.
 type App struct {
-	repo        repository.UserSettingsRepository
-	userService *service.UserService
-	tgClient    *telegram.Client
-	aiClient    *openai.Client
-	convs       map[int64]*conversationState
+	repo            repository.UserSettingsRepository
+	userService     *service.UserService
+	tgClient        *telegram.Client
+	aiClient        *openai.Client
+	convs           map[int64]*conversationState
+	infoOptions     []string
+	categoryOptions []string
 }
 
-func New(telegramToken string, aiToken string, repo repository.UserSettingsRepository) *App {
+func New(cfg *config.Config, repo repository.UserSettingsRepository) *App {
 	return &App{
-		repo:     repo,
-		tgClient: telegram.NewClient(telegramToken),
-		aiClient: openai.NewClient(aiToken),
-		convs:    map[int64]*conversationState{},
+		repo:            repo,
+		tgClient:        telegram.NewClient(cfg.TelegramToken),
+		aiClient:        openai.NewClient(cfg.OpenAIToken, cfg.OpenAIBaseURL),
+		convs:           map[int64]*conversationState{},
+		infoOptions:     cfg.Options.InfoOptions,
+		categoryOptions: cfg.Options.CategoryOptions,
 	}
 }
 
@@ -160,7 +135,7 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 	case "/start":
 		if _, err := a.repo.Get(ctx, m.Chat.ID); err != nil {
 			a.convs[m.Chat.ID] = &conversationState{Stage: stageInfoTypes}
-			prompt := "Какую информацию вы хотели бы получать?\n" + formatOptions(infoOptions) + "\nВведите номера через запятую (не более 5)."
+			prompt := "Какую информацию вы хотели бы получать?\n" + formatOptions(a.infoOptions) + "\nВведите номера через запятую (не более 5)."
 			a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, nil)
 			return
 		}
@@ -175,6 +150,18 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 		} else {
 			a.tgClient.SendMessage(ctx, m.Chat.ID, "Stopped updates", nil)
 		}
+	case "/get_news_now":
+		settings, err := a.repo.Get(ctx, m.Chat.ID)
+		if err != nil {
+			a.tgClient.SendMessage(ctx, m.Chat.ID, "Use /start first", nil)
+			return
+		}
+		msg, err := a.userService.GetNews(ctx, settings)
+		if err != nil {
+			log.Println("get_news_now:", err)
+			return
+		}
+		a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
 	default:
 		if strings.HasPrefix(m.Text, "/update_topics ") {
 			topics := strings.Fields(m.Text[len("/update_topics "):])
@@ -201,7 +188,7 @@ func (a *App) scheduleMessages(ctx context.Context) {
 				continue
 			}
 			for _, u := range users {
-				msg, err := a.userService.GetNews(ctx, u.Topics)
+				msg, err := a.userService.GetNews(ctx, u)
 				if err != nil {
 					log.Println("get news:", err)
 					continue
@@ -215,12 +202,12 @@ func (a *App) scheduleMessages(ctx context.Context) {
 func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *conversationState) {
 	switch c.Stage {
 	case stageInfoTypes:
-		c.InfoTypes = parseSelection(m.Text, infoOptions, 5)
+		c.InfoTypes = parseSelection(m.Text, a.infoOptions, 5)
 		c.Stage = stageCategories
-		prompt := "Выберите категории или топики:\n" + formatOptions(categoryOptions) + "\nВведите номера через запятую (не более 5)."
+		prompt := "Выберите категории или топики:\n" + formatOptions(a.categoryOptions) + "\nВведите номера через запятую (не более 5)."
 		a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, nil)
 	case stageCategories:
-		c.Categories = parseSelection(m.Text, categoryOptions, 5)
+		c.Categories = parseSelection(m.Text, a.categoryOptions, 5)
 		c.Stage = stageFrequency
 		a.tgClient.SendMessage(ctx, m.Chat.ID, "Как часто хотите получать информацию? 0 - один раз, 1-3 - раз в день.", nil)
 	case stageFrequency:
