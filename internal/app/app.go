@@ -29,9 +29,10 @@ const (
 )
 
 type conversationState struct {
-	Stage      convStage
-	InfoTypes  []string
-	Categories []string
+	Stage        convStage
+	InfoTypes    []string
+	Categories   []string
+	UpdateTopics bool
 }
 
 func formatOptions(opts []string) string {
@@ -167,24 +168,12 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 			return
 		}
 		a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
+	case "/update_topics":
+		a.convs[m.Chat.ID] = &conversationState{Stage: stageInfoTypes, UpdateTopics: true}
+		prompt := "Какую информацию вы хотели бы получать?\n" + formatOptions(a.infoOptions) + "\nВведите номера через запятую (не более 5)."
+		a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, nil)
 	default:
-		if strings.HasPrefix(m.Text, "/update_topics") {
-			topics := strings.Fields(strings.TrimPrefix(m.Text, "/update_topics"))
-			if len(topics) > 0 && topics[0] == "" {
-				topics = topics[1:]
-			}
-			if err := a.userService.UpdateTopics(ctx, m.Chat.ID, topics); err != nil {
-				if errors.Is(err, os.ErrNotExist) {
-					a.convs[m.Chat.ID] = &conversationState{Stage: stageInfoTypes}
-					prompt := "Какую информацию вы хотели бы получать?\n" + formatOptions(a.infoOptions) + "\nВведите номера через запятую (не более 5)."
-					a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, nil)
-				} else {
-					log.Println("update_topics:", err)
-				}
-			} else {
-				a.tgClient.SendMessage(ctx, m.Chat.ID, "Topics updated", nil)
-			}
-		}
+		// ignore other messages
 	}
 }
 
@@ -234,6 +223,26 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, nil)
 	case stageCategories:
 		c.Categories = parseSelection(m.Text, a.categoryOptions, 5)
+		if c.UpdateTopics {
+			settings, err := a.repo.Get(ctx, m.Chat.ID)
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				log.Println("save settings:", err)
+				delete(a.convs, m.Chat.ID)
+				return
+			}
+			if err != nil && errors.Is(err, os.ErrNotExist) {
+				settings = &model.UserSettings{UserID: m.Chat.ID}
+			}
+			settings.InfoTypes = c.InfoTypes
+			settings.Categories = c.Categories
+			if err := a.repo.Save(ctx, settings); err != nil {
+				log.Println("save settings:", err)
+			} else {
+				a.tgClient.SendMessage(ctx, m.Chat.ID, "Настройки обновлены", nil)
+			}
+			delete(a.convs, m.Chat.ID)
+			return
+		}
 		c.Stage = stageFrequency
 		a.tgClient.SendMessage(ctx, m.Chat.ID, "Как часто хотите получать информацию? 0 - один раз, 1-3 - раз в день.", nil)
 	case stageFrequency:
