@@ -20,7 +20,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	application := app.New(cfg.TelegramToken, cfg.OpenAIToken, repo)
+	application := app.New(cfg, repo)
 	if err := application.Run(context.Background()); err != nil {
 		log.Fatal(err)
 	}

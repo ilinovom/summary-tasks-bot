@@ -1,13 +1,13 @@
 package telegram
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 )
 
 // Update represents a Telegram update. Only fields we need.
@@ -45,15 +45,27 @@ func (c *Client) url(method string) string {
 	return c.baseURL + "/bot" + c.token + "/" + method
 }
 
-func (c *Client) SendMessage(ctx context.Context, chatID int64, text string) error {
-	form := url.Values{}
-	form.Set("chat_id", strconv.FormatInt(chatID, 10))
-	form.Set("text", text)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url("sendMessage"), strings.NewReader(form.Encode()))
+func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, keyboard [][]string) error {
+	body := map[string]any{
+		"chat_id": chatID,
+		"text":    text,
+	}
+	if keyboard != nil {
+		body["reply_markup"] = map[string]any{
+			"keyboard":          keyboard,
+			"one_time_keyboard": true,
+			"resize_keyboard":   true,
+		}
+	}
+	b, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url("sendMessage"), bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
