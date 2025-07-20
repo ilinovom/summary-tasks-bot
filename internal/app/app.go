@@ -61,6 +61,7 @@ func parseSelection(text string, opts []string, limit int) []string {
 
 // App coordinates the services and telegram client.
 type App struct {
+	cfg             *config.Config
 	repo            repository.UserSettingsRepository
 	userService     *service.UserService
 	tgClient        *telegram.Client
@@ -72,9 +73,10 @@ type App struct {
 
 func New(cfg *config.Config, repo repository.UserSettingsRepository) *App {
 	return &App{
+		cfg:             cfg,
 		repo:            repo,
 		tgClient:        telegram.NewClient(cfg.TelegramToken),
-		aiClient:        openai.NewClient(cfg.OpenAIToken, cfg.OpenAIBaseURL),
+		aiClient:        openai.NewClient(cfg.OpenAIToken, cfg.OpenAIBaseURL, cfg.OpenAIModel),
 		convs:           map[int64]*conversationState{},
 		infoOptions:     cfg.Options.InfoOptions,
 		categoryOptions: cfg.Options.CategoryOptions,
@@ -82,7 +84,7 @@ func New(cfg *config.Config, repo repository.UserSettingsRepository) *App {
 }
 
 func (a *App) Run(ctx context.Context) error {
-	a.userService = service.NewUserService(a.repo, a.aiClient)
+	a.userService = service.NewUserService(a.repo, a.aiClient, a.cfg.Prompt)
 
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
 	defer stop()

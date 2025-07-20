@@ -20,7 +20,11 @@ Set the following environment variables before running the bot:
 
 * `TELEGRAM_TOKEN` – your Telegram bot token (required)
 * `OPENAI_TOKEN` – OpenAI API token (optional, enables news generation using OpenAI)
+* `OPENAI_MODEL` – GPT model to use (defaults to `gpt-3.5-turbo`)
+* `OPENAI_BASE_URL` – base URL for the OpenAI API (optional)
 * `SETTINGS_FILE` – path to the JSON file for storing user settings (defaults to `settings.json`)
+* `OPTIONS_FILE` – path to JSON with option lists (defaults to `options.json`)
+* `PROMPT_FILE` – path to the prompt configuration JSON (defaults to `prompt.json`)
 
 Then start the bot with:
 

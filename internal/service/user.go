@@ -2,9 +2,10 @@ package service
 
 import (
 	"context"
-	"fmt"
+	"math/rand"
 	"strings"
 
+	"github.com/example/summary-tasks-bot/internal/config"
 	"github.com/example/summary-tasks-bot/internal/model"
 	"github.com/example/summary-tasks-bot/internal/repository"
 )
@@ -17,10 +18,11 @@ type AIClient interface {
 type UserService struct {
 	repo   repository.UserSettingsRepository
 	openai AIClient
+	prompt config.PromptConfig
 }
 
-func NewUserService(repo repository.UserSettingsRepository, ai AIClient) *UserService {
-	return &UserService{repo: repo, openai: ai}
+func NewUserService(repo repository.UserSettingsRepository, ai AIClient, p config.PromptConfig) *UserService {
+	return &UserService{repo: repo, openai: ai, prompt: p}
 }
 
 // Start activates a user with default topics.
@@ -51,19 +53,21 @@ func (s *UserService) Stop(ctx context.Context, userID int64) error {
 
 // GetNews returns news about the provided topics using the OpenAI API.
 func (s *UserService) GetNews(ctx context.Context, u *model.UserSettings) (string, error) {
-	parts := []string{}
+	info := ""
 	if len(u.InfoTypes) > 0 {
-		parts = append(parts, strings.Join(u.InfoTypes, ", "))
+		info = u.InfoTypes[rand.Intn(len(u.InfoTypes))]
 	}
+	category := ""
 	if len(u.Categories) > 0 {
-		parts = append(parts, strings.Join(u.Categories, ", "))
+		category = u.Categories[rand.Intn(len(u.Categories))]
 	}
-	if len(u.Topics) > 0 {
-		parts = append(parts, strings.Join(u.Topics, ", "))
-	}
-	prompt := fmt.Sprintf("Give me the latest %s in two sentences.", strings.Join(parts, ", "))
+	prompt := s.prompt.Prompt
+	prompt = strings.ReplaceAll(prompt, "{тип}", info)
+	prompt = strings.ReplaceAll(prompt, "{категория}", category)
+	prompt = strings.ReplaceAll(prompt, "{тон}", s.prompt.Style)
+	prompt = strings.ReplaceAll(prompt, "{объём}", s.prompt.Volume)
 	if s.openai == nil {
-		return "Latest " + strings.Join(parts, ", "), nil
+		return prompt, nil
 	}
 	return s.openai.ChatCompletion(ctx, prompt)
 }
