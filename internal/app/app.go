@@ -157,7 +157,17 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 		if err := a.userService.Start(ctx, m.Chat.ID); err != nil {
 			log.Println("start:", err)
 		} else {
-			a.tgClient.SendMessage(ctx, m.Chat.ID, "Welcome! Use /update_topics to set topics.", nil)
+			const msg = `Привет! 
+/start для старта/возобновления отправки сообщений.
+/update_topics для обновления типов и категорий.
+/update_news_schedule для обновления расписания отправки сообщений.
+/get_news_now, чтобы получить информацию прямо сейчас.
+/stop, чтобы остановить отправку сообщений.`
+
+			err := a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
+			if err != nil {
+				log.Println(fmt.Sprintf("error when sending message to chat id %v: %w", m.Chat.ID, err))
+			}
 		}
 	case "/stop":
 		log.Printf("user %d called /stop", m.Chat.ID)
