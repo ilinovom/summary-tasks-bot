@@ -12,21 +12,16 @@ import (
 type Client struct {
 	token      string
 	baseURL    string
-	model      string
 	httpClient *http.Client
 }
 
-func NewClient(token, baseURL, model string) *Client {
+func NewClient(token, baseURL string) *Client {
 	if baseURL == "" {
 		baseURL = "https://api.openai.com/v1"
-	}
-	if model == "" {
-		model = "gpt-3.5-turbo"
 	}
 	return &Client{
 		token:      token,
 		baseURL:    baseURL,
-		model:      model,
 		httpClient: http.DefaultClient,
 	}
 }
@@ -54,10 +49,10 @@ func (c *Client) do(ctx context.Context, endpoint string, body any, out any) err
 }
 
 // ChatCompletion sends a minimal chat completion request using the configured model.
-func (c *Client) ChatCompletion(ctx context.Context, prompt string) (string, error) {
+func (c *Client) ChatCompletion(ctx context.Context, model, prompt string) (string, error) {
 	log.Println("openai chat completion")
 	reqBody := map[string]any{
-		"model":    c.model,
+		"model":    model,
 		"messages": []map[string]string{{"role": "user", "content": prompt}},
 	}
 	var respBody struct {

@@ -15,18 +15,17 @@ import (
 
 // AIClient describes the part of the OpenAI client used by the service.
 type AIClient interface {
-	ChatCompletion(ctx context.Context, prompt string) (string, error)
+	ChatCompletion(ctx context.Context, model, prompt string) (string, error)
 }
 
 type UserService struct {
 	repo    repository.UserSettingsRepository
 	openai  AIClient
 	tariffs map[string]config.Tariff
-	prompt  config.PromptConfig // fallback when tariff missing
 }
 
-func NewUserService(repo repository.UserSettingsRepository, ai AIClient, tariffs map[string]config.Tariff, p config.PromptConfig) *UserService {
-	return &UserService{repo: repo, openai: ai, tariffs: tariffs, prompt: p}
+func NewUserService(repo repository.UserSettingsRepository, ai AIClient, tariffs map[string]config.Tariff) *UserService {
+	return &UserService{repo: repo, openai: ai, tariffs: tariffs}
 }
 
 // Start activates a user with default topics.
@@ -80,9 +79,7 @@ func (s *UserService) GetNews(ctx context.Context, u *model.UserSettings) (strin
 	}
 	t, ok := s.tariffs[u.Tariff]
 	if !ok {
-		t.Prompt = s.prompt.Prompt
-		t.Style = s.prompt.Style
-		t.Volume = s.prompt.Volume
+		log.Fatal("tariff for user is not set", u.UserID)
 	}
 	prompt := t.Prompt
 	prompt = strings.ReplaceAll(prompt, "{тип}", info)
@@ -95,7 +92,7 @@ func (s *UserService) GetNews(ctx context.Context, u *model.UserSettings) (strin
 		resp = prompt
 	} else {
 		log.Println("calling OpenAI")
-		resp, err = s.openai.ChatCompletion(ctx, prompt)
+		resp, err = s.openai.ChatCompletion(ctx, t.GptModelVersion, prompt)
 		if err != nil {
 			return "", err
 		}
