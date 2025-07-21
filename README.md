@@ -13,7 +13,7 @@ The bot understands the following commands:
 * `/my_topics` – show your selected info types and categories.
 * `/stop` – stop receiving updates.
 
-User settings are stored in a JSON file specified via the `SETTINGS_FILE` environment variable.
+User settings are stored in a Postgres database specified via the `DATABASE_URL` environment variable.
 
 ### Running
 
@@ -23,7 +23,7 @@ Set the following environment variables before running the bot:
 * `OPENAI_TOKEN` – OpenAI API token (optional, enables news generation using OpenAI)
 * `OPENAI_MODEL` – GPT model to use (defaults to `gpt-3.5-turbo`)
 * `OPENAI_BASE_URL` – base URL for the OpenAI API (optional)
-* `SETTINGS_FILE` – path to the JSON file for storing user settings (defaults to `settings.json`)
+* `DATABASE_URL` – Postgres connection string (required)
 * `OPTIONS_FILE` – path to JSON with option lists (defaults to `options.json`)
 * `PROMPT_FILE` – path to the prompt configuration JSON (defaults to `prompt.json`)
 * `TARIFF_FILE` – path to the tariffs configuration JSON (defaults to `tariff.json`)

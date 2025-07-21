@@ -15,7 +15,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	repo, err := repository.NewFileUserSettingsRepository(cfg.SettingsPath)
+	repo, err := repository.NewPostgresUserSettingsRepository(cfg.DBConnString)
 	if err != nil {
 		log.Fatal(err)
 	}
