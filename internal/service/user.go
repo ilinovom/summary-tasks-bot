@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"math/rand"
+	"os"
 	"strings"
 
 	"github.com/example/summary-tasks-bot/internal/config"
@@ -27,7 +29,17 @@ func NewUserService(repo repository.UserSettingsRepository, ai AIClient, p confi
 
 // Start activates a user with default topics.
 func (s *UserService) Start(ctx context.Context, userID int64) error {
-	settings := &model.UserSettings{UserID: userID, Topics: []string{"golang"}, Active: true}
+	settings, err := s.repo.Get(ctx, userID)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		settings = &model.UserSettings{UserID: userID, Topics: []string{"golang"}}
+	}
+	if len(settings.Topics) == 0 {
+		settings.Topics = []string{"golang"}
+	}
+	settings.Active = true
 	return s.repo.Save(ctx, settings)
 }
 
