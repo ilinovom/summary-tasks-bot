@@ -8,6 +8,7 @@ type UserSettings struct {
 	InfoTypes  []string `json:"info_types,omitempty"`
 	Categories []string `json:"categories,omitempty"`
 	Frequency  int      `json:"frequency,omitempty"`
+	Tariff     string   `json:"tariff,omitempty"`
 }
 
 // Subscription represents a scheduled message subscription.

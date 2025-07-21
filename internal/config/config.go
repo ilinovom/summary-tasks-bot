@@ -19,6 +19,15 @@ type PromptConfig struct {
 	Volume string `json:"volume"`
 }
 
+type Tariff struct {
+	FrequencyScheduledMsgSendInMinutes int    `json:"frequency_scheduled_msg_send_in_minutes"`
+	TimeRangeScheduledMsgSendPerDay    string `json:"time_range_scheduled_msg_send_per_day"`
+	NumberGetNewsNowMessagesPerDay     int    `json:"number_get_news_now_messages_per_day"`
+	Prompt                             string `json:"prompt"`
+	Style                              string `json:"style"`
+	Volume                             string `json:"volume"`
+}
+
 type Config struct {
 	TelegramToken string
 	OpenAIToken   string
@@ -27,9 +36,11 @@ type Config struct {
 	SettingsPath  string
 	OptionsFile   string
 	PromptFile    string
+	TariffFile    string
 
 	Options Options
 	Prompt  PromptConfig
+	Tariffs map[string]Tariff
 }
 
 // FromEnv loads configuration from environment variables. TELEGRAM_TOKEN is required.
@@ -45,6 +56,7 @@ func FromEnv() (*Config, error) {
 		SettingsPath:  os.Getenv("SETTINGS_FILE"),
 		OptionsFile:   os.Getenv("OPTIONS_FILE"),
 		PromptFile:    os.Getenv("PROMPT_FILE"),
+		TariffFile:    os.Getenv("TARIFF_FILE"),
 	}
 	if c.TelegramToken == "" {
 		return nil, errors.New("TELEGRAM_TOKEN is not set")
@@ -64,10 +76,16 @@ func FromEnv() (*Config, error) {
 	if c.PromptFile == "" {
 		c.PromptFile = "prompt.json"
 	}
+	if c.TariffFile == "" {
+		c.TariffFile = "tariff.json"
+	}
 	if err := c.loadOptions(); err != nil {
 		return nil, err
 	}
 	if err := c.loadPrompt(); err != nil {
+		return nil, err
+	}
+	if err := c.loadTariffs(); err != nil {
 		return nil, err
 	}
 	return c, nil
@@ -89,4 +107,13 @@ func (c *Config) loadPrompt() error {
 	}
 	defer file.Close()
 	return json.NewDecoder(file).Decode(&c.Prompt)
+}
+
+func (c *Config) loadTariffs() error {
+	file, err := os.Open(c.TariffFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return json.NewDecoder(file).Decode(&c.Tariffs)
 }

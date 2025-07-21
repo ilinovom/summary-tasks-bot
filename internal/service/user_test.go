@@ -50,7 +50,7 @@ func (m *memRepo) List(ctx context.Context) ([]*model.UserSettings, error) {
 
 func TestUserService_StartStop(t *testing.T) {
 	repo := newMemRepo()
-	svc := NewUserService(repo, nil, config.PromptConfig{})
+	svc := NewUserService(repo, nil, nil, config.PromptConfig{})
 	ctx := context.Background()
 
 	if err := svc.Start(ctx, 1); err != nil {

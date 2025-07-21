@@ -19,13 +19,14 @@ type AIClient interface {
 }
 
 type UserService struct {
-	repo   repository.UserSettingsRepository
-	openai AIClient
-	prompt config.PromptConfig
+	repo    repository.UserSettingsRepository
+	openai  AIClient
+	tariffs map[string]config.Tariff
+	prompt  config.PromptConfig // fallback when tariff missing
 }
 
-func NewUserService(repo repository.UserSettingsRepository, ai AIClient, p config.PromptConfig) *UserService {
-	return &UserService{repo: repo, openai: ai, prompt: p}
+func NewUserService(repo repository.UserSettingsRepository, ai AIClient, tariffs map[string]config.Tariff, p config.PromptConfig) *UserService {
+	return &UserService{repo: repo, openai: ai, tariffs: tariffs, prompt: p}
 }
 
 // Start activates a user with default topics.
@@ -39,6 +40,9 @@ func (s *UserService) Start(ctx context.Context, userID int64) error {
 	}
 	if len(settings.Topics) == 0 {
 		settings.Topics = []string{"golang"}
+	}
+	if settings.Tariff == "" {
+		settings.Tariff = "base"
 	}
 	settings.Active = true
 	return s.repo.Save(ctx, settings)
@@ -74,11 +78,17 @@ func (s *UserService) GetNews(ctx context.Context, u *model.UserSettings) (strin
 	if len(u.Categories) > 0 {
 		category = u.Categories[rand.Intn(len(u.Categories))]
 	}
-	prompt := s.prompt.Prompt
+	t, ok := s.tariffs[u.Tariff]
+	if !ok {
+		t.Prompt = s.prompt.Prompt
+		t.Style = s.prompt.Style
+		t.Volume = s.prompt.Volume
+	}
+	prompt := t.Prompt
 	prompt = strings.ReplaceAll(prompt, "{тип}", info)
 	prompt = strings.ReplaceAll(prompt, "{категория}", category)
-	prompt = strings.ReplaceAll(prompt, "{тон}", s.prompt.Style)
-	prompt = strings.ReplaceAll(prompt, "{объём}", s.prompt.Volume)
+	prompt = strings.ReplaceAll(prompt, "{тон}", t.Style)
+	prompt = strings.ReplaceAll(prompt, "{объём}", t.Volume)
 	var resp string
 	var err error
 	if s.openai == nil {
