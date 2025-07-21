@@ -62,10 +62,19 @@ func (r *PostgresUserSettingsRepository) Get(ctx context.Context, userID int64) 
 }
 
 func (r *PostgresUserSettingsRepository) Save(ctx context.Context, settings *model.UserSettings) error {
-	topics, _ := json.Marshal(settings.Topics)
-	infoTypes, _ := json.Marshal(settings.InfoTypes)
-	categories, _ := json.Marshal(settings.Categories)
-	_, err := r.db.ExecContext(ctx, `
+	topics, err := json.Marshal(settings.Topics)
+	if err != nil {
+		return err
+	}
+	infoTypes, err := json.Marshal(settings.InfoTypes)
+	if err != nil {
+		return err
+	}
+	categories, err := json.Marshal(settings.Categories)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.ExecContext(ctx, `
         INSERT INTO user_settings (user_id, topics, active, info_types, categories, frequency, tariff, last_scheduled_sent, last_get_news_now, get_news_now_count)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
         ON CONFLICT (user_id) DO UPDATE SET
@@ -78,7 +87,7 @@ func (r *PostgresUserSettingsRepository) Save(ctx context.Context, settings *mod
             last_scheduled_sent=EXCLUDED.last_scheduled_sent,
             last_get_news_now=EXCLUDED.last_get_news_now,
             get_news_now_count=EXCLUDED.get_news_now_count
-    `, settings.UserID, topics, settings.Active, infoTypes, categories, settings.Frequency, settings.Tariff, settings.LastScheduledSent, settings.LastGetNewsNow, settings.GetNewsNowCount)
+    `, settings.UserID, string(topics), settings.Active, string(infoTypes), string(categories), settings.Frequency, settings.Tariff, settings.LastScheduledSent, settings.LastGetNewsNow, settings.GetNewsNowCount)
 	return err
 }
 
