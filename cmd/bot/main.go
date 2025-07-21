@@ -21,6 +21,7 @@ func main() {
 	}
 
 	application := app.New(cfg, repo)
+	log.Println("bot running")
 	if err := application.Run(context.Background()); err != nil {
 		log.Fatal(err)
 	}

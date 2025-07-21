@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 )
 
@@ -54,6 +55,7 @@ func (c *Client) do(ctx context.Context, endpoint string, body any, out any) err
 
 // ChatCompletion sends a minimal chat completion request using the configured model.
 func (c *Client) ChatCompletion(ctx context.Context, prompt string) (string, error) {
+	log.Println("openai chat completion")
 	reqBody := map[string]any{
 		"model":    c.model,
 		"messages": []map[string]string{{"role": "user", "content": prompt}},
