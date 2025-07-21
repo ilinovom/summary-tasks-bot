@@ -87,7 +87,7 @@ func New(cfg *config.Config, repo repository.UserSettingsRepository) *App {
 
 func (a *App) Run(ctx context.Context) error {
 	log.Println("application starting")
-	a.userService = service.NewUserService(a.repo, a.aiClient, a.cfg.Prompt)
+	a.userService = service.NewUserService(a.repo, a.aiClient, a.cfg.Tariffs, a.cfg.Prompt)
 
 	a.setCommands(ctx)
 
@@ -166,7 +166,7 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 
 			err := a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
 			if err != nil {
-				log.Println(fmt.Sprintf("error when sending message to chat id %v: %w", m.Chat.ID, err))
+				log.Printf("error when sending message to chat id %v: %v", m.Chat.ID, err)
 			}
 		}
 	case "/stop":
@@ -183,11 +183,40 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 			a.tgClient.SendMessage(ctx, m.Chat.ID, "Use /start first", nil)
 			return
 		}
+		tariff, ok := a.cfg.Tariffs[settings.Tariff]
+		if !ok {
+			tariff = a.cfg.Tariffs["base"]
+		}
+		now := time.Now()
+		last := time.Unix(settings.LastGetNewsNow, 0)
+		if now.YearDay() != last.YearDay() || now.Year() != last.Year() {
+			settings.GetNewsNowCount = 0
+		}
+		if settings.GetNewsNowCount >= tariff.NumberGetNewsNowMessagesPerDay {
+			a.tgClient.SendMessage(ctx, m.Chat.ID, "Лимит исчерпан на сегодня", nil)
+			return
+		}
+		settings.GetNewsNowCount++
+		settings.LastGetNewsNow = now.Unix()
+		if err := a.repo.Save(ctx, settings); err != nil {
+			log.Println("save settings:", err)
+		}
 		msg, err := a.userService.GetNews(ctx, settings)
 		if err != nil {
 			log.Println("get_news_now:", err)
 			return
 		}
+		a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
+	case "/my_topics":
+		log.Printf("user %d called /my_topics", m.Chat.ID)
+		settings, err := a.repo.Get(ctx, m.Chat.ID)
+		if err != nil {
+			a.tgClient.SendMessage(ctx, m.Chat.ID, "Use /start first", nil)
+			return
+		}
+		info := strings.Join(settings.InfoTypes, ", ")
+		cats := strings.Join(settings.Categories, ", ")
+		msg := fmt.Sprintf("Ваши типы: %s\nВаши категории: %s", info, cats)
 		a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
 	case "/update_topics":
 		log.Printf("user %d called /update_topics", m.Chat.ID)
@@ -199,8 +228,27 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 	}
 }
 
+func inTimeRange(now time.Time, rng string) bool {
+	parts := strings.Split(rng, "-")
+	if len(parts) != 2 {
+		return true
+	}
+	start, err1 := time.Parse("15:04", parts[0])
+	end, err2 := time.Parse("15:04", parts[1])
+	if err1 != nil || err2 != nil {
+		return true
+	}
+	y, m, d := now.Date()
+	start = time.Date(y, m, d, start.Hour(), start.Minute(), 0, 0, now.Location())
+	end = time.Date(y, m, d, end.Hour(), end.Minute(), 0, 0, now.Location())
+	if end.Before(start) {
+		return now.After(start) || now.Before(end)
+	}
+	return !now.Before(start) && !now.After(end)
+}
+
 func (a *App) scheduleMessages(ctx context.Context) {
-	ticker := time.NewTicker(1 * time.Hour)
+	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 	for {
 		select {
@@ -212,13 +260,29 @@ func (a *App) scheduleMessages(ctx context.Context) {
 				log.Println("active users:", err)
 				continue
 			}
+			now := time.Now()
 			for _, u := range users {
+				tariff, ok := a.cfg.Tariffs[u.Tariff]
+				if !ok {
+					tariff = a.cfg.Tariffs["base"]
+				}
+				if !inTimeRange(now, tariff.TimeRangeScheduledMsgSendPerDay) {
+					continue
+				}
+				last := time.Unix(u.LastScheduledSent, 0)
+				if now.Sub(last) < time.Duration(tariff.FrequencyScheduledMsgSendInMinutes)*time.Minute {
+					continue
+				}
 				msg, err := a.userService.GetNews(ctx, u)
 				if err != nil {
 					log.Println("get news:", err)
 					continue
 				}
 				a.tgClient.SendMessage(ctx, u.UserID, msg, nil)
+				u.LastScheduledSent = now.Unix()
+				if err := a.repo.Save(ctx, u); err != nil {
+					log.Println("save settings:", err)
+				}
 			}
 		}
 	}
@@ -229,6 +293,7 @@ func (a *App) setCommands(ctx context.Context) {
 		{Command: "start", Description: "Start interaction"},
 		{Command: "update_topics", Description: "Update your topics"},
 		{Command: "get_news_now", Description: "Get news immediately"},
+		{Command: "my_topics", Description: "Show my topics"},
 		{Command: "stop", Description: "Stop receiving updates"},
 	}
 	if err := a.tgClient.SetCommands(ctx, cmds); err != nil {
@@ -274,12 +339,16 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			return
 		}
 		settings := &model.UserSettings{
-			UserID:     m.Chat.ID,
-			Topics:     c.Categories,
-			InfoTypes:  c.InfoTypes,
-			Categories: c.Categories,
-			Frequency:  freq,
-			Active:     true,
+			UserID:            m.Chat.ID,
+			Topics:            c.Categories,
+			InfoTypes:         c.InfoTypes,
+			Categories:        c.Categories,
+			Frequency:         freq,
+			Tariff:            "base",
+			LastScheduledSent: 0,
+			LastGetNewsNow:    0,
+			GetNewsNowCount:   0,
+			Active:            true,
 		}
 		if err := a.repo.Save(ctx, settings); err != nil {
 			log.Println("save settings:", err)
