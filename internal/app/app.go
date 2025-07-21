@@ -86,6 +86,7 @@ func New(cfg *config.Config, repo repository.UserSettingsRepository) *App {
 }
 
 func (a *App) Run(ctx context.Context) error {
+	log.Println("application starting")
 	a.userService = service.NewUserService(a.repo, a.aiClient, a.cfg.Prompt)
 
 	a.setCommands(ctx)
@@ -109,14 +110,21 @@ func (a *App) Run(ctx context.Context) error {
 
 	<-ctx.Done()
 	wg.Wait()
+	log.Println("application stopped")
 	return nil
 }
 
 func (a *App) handleUpdates(ctx context.Context) {
 	offset := 0
 	for {
+		if ctx.Err() != nil {
+			return
+		}
 		updates, err := a.tgClient.GetUpdates(ctx, offset)
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return
+			}
 			log.Println("get updates:", err)
 			time.Sleep(time.Second)
 			continue
@@ -139,6 +147,7 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 
 	switch m.Text {
 	case "/start":
+		log.Printf("user %d called /start", m.Chat.ID)
 		if _, err := a.repo.Get(ctx, m.Chat.ID); err != nil {
 			a.convs[m.Chat.ID] = &conversationState{Stage: stageInfoTypes}
 			prompt := "Какую информацию вы хотели бы получать?\n" + formatOptions(a.infoOptions) + "\nВведите номера через запятую (не более 5)."
@@ -151,12 +160,14 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 			a.tgClient.SendMessage(ctx, m.Chat.ID, "Welcome! Use /update_topics to set topics.", nil)
 		}
 	case "/stop":
+		log.Printf("user %d called /stop", m.Chat.ID)
 		if err := a.userService.Stop(ctx, m.Chat.ID); err != nil {
 			log.Println("stop:", err)
 		} else {
 			a.tgClient.SendMessage(ctx, m.Chat.ID, "Stopped updates", nil)
 		}
 	case "/get_news_now":
+		log.Printf("user %d called /get_news_now", m.Chat.ID)
 		settings, err := a.repo.Get(ctx, m.Chat.ID)
 		if err != nil {
 			a.tgClient.SendMessage(ctx, m.Chat.ID, "Use /start first", nil)
@@ -169,6 +180,7 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 		}
 		a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
 	case "/update_topics":
+		log.Printf("user %d called /update_topics", m.Chat.ID)
 		a.convs[m.Chat.ID] = &conversationState{Stage: stageInfoTypes, UpdateTopics: true}
 		prompt := "Какую информацию вы хотели бы получать?\n" + formatOptions(a.infoOptions) + "\nВведите номера через запятую (не более 5)."
 		a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, nil)

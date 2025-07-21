@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
 	"math/rand"
 	"os"
 	"strings"
@@ -83,6 +84,7 @@ func (s *UserService) GetNews(ctx context.Context, u *model.UserSettings) (strin
 	if s.openai == nil {
 		resp = prompt
 	} else {
+		log.Println("calling OpenAI")
 		resp, err = s.openai.ChatCompletion(ctx, prompt)
 		if err != nil {
 			return "", err
