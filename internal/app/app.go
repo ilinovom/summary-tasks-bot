@@ -78,7 +78,7 @@ func New(cfg *config.Config, repo repository.UserSettingsRepository) *App {
 		cfg:             cfg,
 		repo:            repo,
 		tgClient:        telegram.NewClient(cfg.TelegramToken),
-		aiClient:        openai.NewClient(cfg.OpenAIToken, cfg.OpenAIBaseURL, cfg.OpenAIModel),
+		aiClient:        openai.NewClient(cfg.OpenAIToken, cfg.OpenAIBaseURL),
 		convs:           map[int64]*conversationState{},
 		infoOptions:     cfg.Options.InfoOptions,
 		categoryOptions: cfg.Options.CategoryOptions,
@@ -87,7 +87,7 @@ func New(cfg *config.Config, repo repository.UserSettingsRepository) *App {
 
 func (a *App) Run(ctx context.Context) error {
 	log.Println("application starting")
-	a.userService = service.NewUserService(a.repo, a.aiClient, a.cfg.Tariffs, a.cfg.Prompt)
+	a.userService = service.NewUserService(a.repo, a.aiClient, a.cfg.Tariffs)
 
 	a.setCommands(ctx)
 
@@ -157,12 +157,23 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 		if err := a.userService.Start(ctx, m.Chat.ID); err != nil {
 			log.Println("start:", err)
 		} else {
-			const msg = `Привет! 
-/start для старта/возобновления отправки сообщений.
-/update_topics для обновления типов и категорий.
-/update_news_schedule для обновления расписания отправки сообщений.
-/get_news_now, чтобы получить информацию прямо сейчас.
-/stop, чтобы остановить отправку сообщений.`
+			const msg = `Привет! Я бот для расширения кругозора.
+Что я умею?
+	- по выбранной категории и типу информации присылать тебе сообщения, которые будут развивать твой кругозор.
+
+Как часто можно получать сообщения?
+1) На бесплатном тарифе можно:
+	- получать до 5 сообщений моментально (команда /get_news_now)
+	- получать сообщения каждые 3 часа в интервале с 08:00 до 23:00
+   * суммарно можно получить за день 8 сообщений
+2) Другие тарифы пока прорабатываются ...
+
+Какие у меня есть команды?
+	- /start для старта/возобновления отправки сообщений.
+	- /update_topics для обновления типов и категорий.
+	- /get_news_now, чтобы получить информацию прямо сейчас.
+	- /my_topics, чтобы получить установленные категории и типы информации.
+	- /stop, чтобы остановить отправку сообщений.`
 
 			err := a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
 			if err != nil {
