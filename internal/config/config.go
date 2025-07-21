@@ -12,13 +12,6 @@ type Options struct {
 	CategoryOptions []string `json:"category_options"`
 }
 
-// Config holds runtime configuration loaded from the environment.
-type PromptConfig struct {
-	Prompt string `json:"prompt"`
-	Style  string `json:"style"`
-	Volume string `json:"volume"`
-}
-
 type Tariff struct {
 	FrequencyScheduledMsgSendInMinutes int    `json:"frequency_scheduled_msg_send_in_minutes"`
 	TimeRangeScheduledMsgSendPerDay    string `json:"time_range_scheduled_msg_send_per_day"`
@@ -26,6 +19,7 @@ type Tariff struct {
 	Prompt                             string `json:"prompt"`
 	Style                              string `json:"style"`
 	Volume                             string `json:"volume"`
+	GptModelVersion                    string `json:"gpt_model_version"`
 }
 
 type Config struct {
@@ -40,7 +34,6 @@ type Config struct {
 	TariffFile    string
 
 	Options Options
-	Prompt  PromptConfig
 	Tariffs map[string]Tariff
 }
 
@@ -57,7 +50,6 @@ func FromEnv() (*Config, error) {
 		DBConnString:  os.Getenv("DATABASE_URL"),
 		SettingsPath:  os.Getenv("SETTINGS_FILE"),
 		OptionsFile:   os.Getenv("OPTIONS_FILE"),
-		PromptFile:    os.Getenv("PROMPT_FILE"),
 		TariffFile:    os.Getenv("TARIFF_FILE"),
 	}
 	if c.TelegramToken == "" {
@@ -72,22 +64,13 @@ func FromEnv() (*Config, error) {
 	if c.OpenAIBaseURL == "" {
 		c.OpenAIBaseURL = "https://api.openai.com/v1"
 	}
-	if c.OpenAIModel == "" {
-		c.OpenAIModel = "gpt-3.5-turbo"
-	}
 	if c.OptionsFile == "" {
 		c.OptionsFile = "options.json"
-	}
-	if c.PromptFile == "" {
-		c.PromptFile = "prompt.json"
 	}
 	if c.TariffFile == "" {
 		c.TariffFile = "tariff.json"
 	}
 	if err := c.loadOptions(); err != nil {
-		return nil, err
-	}
-	if err := c.loadPrompt(); err != nil {
 		return nil, err
 	}
 	if err := c.loadTariffs(); err != nil {
@@ -103,15 +86,6 @@ func (c *Config) loadOptions() error {
 	}
 	defer file.Close()
 	return json.NewDecoder(file).Decode(&c.Options)
-}
-
-func (c *Config) loadPrompt() error {
-	file, err := os.Open(c.PromptFile)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	return json.NewDecoder(file).Decode(&c.Prompt)
 }
 
 func (c *Config) loadTariffs() error {
