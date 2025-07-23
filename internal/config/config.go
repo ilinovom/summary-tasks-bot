@@ -27,6 +27,7 @@ type Config struct {
 	OpenAIToken   string
 	OpenAIBaseURL string
 	OpenAIModel   string
+	DBConnString  string
 	SettingsPath  string
 	OptionsFile   string
 	PromptFile    string
@@ -38,19 +39,24 @@ type Config struct {
 
 // FromEnv loads configuration from environment variables. TELEGRAM_TOKEN is required.
 // OPENAI_TOKEN is optional but should be set if OpenAI integration is needed.
-// SETTINGS_FILE specifies the path to the user settings JSON file and defaults
-// to "settings.json" if empty.
+// DATABASE_URL specifies the Postgres connection string. SETTINGS_FILE is ignored
+// but defaults to "settings.json" if empty for backward compatibility.
 func FromEnv() (*Config, error) {
 	c := &Config{
 		TelegramToken: os.Getenv("TELEGRAM_TOKEN"),
 		OpenAIToken:   os.Getenv("OPENAI_TOKEN"),
 		OpenAIBaseURL: os.Getenv("OPENAI_BASE_URL"),
+		OpenAIModel:   os.Getenv("OPENAI_MODEL"),
+		DBConnString:  os.Getenv("DATABASE_URL"),
 		SettingsPath:  os.Getenv("SETTINGS_FILE"),
 		OptionsFile:   os.Getenv("OPTIONS_FILE"),
 		TariffFile:    os.Getenv("TARIFF_FILE"),
 	}
 	if c.TelegramToken == "" {
 		return nil, errors.New("TELEGRAM_TOKEN is not set")
+	}
+	if c.DBConnString == "" {
+		c.DBConnString = "postgres://user:pass@localhost:5432/postgres?sslmode=disable"
 	}
 	if c.SettingsPath == "" {
 		c.SettingsPath = "settings.json"

@@ -25,7 +25,6 @@ type convStage int
 const (
 	stageInfoTypes convStage = iota + 1
 	stageCategories
-	stageFrequency
 )
 
 type conversationState struct {
@@ -341,20 +340,12 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			delete(a.convs, m.Chat.ID)
 			return
 		}
-		c.Stage = stageFrequency
-		a.tgClient.SendMessage(ctx, m.Chat.ID, "Как часто хотите получать информацию? 0 - один раз, 1-3 - раз в день.", nil)
-	case stageFrequency:
-		freq, err := strconv.Atoi(strings.TrimSpace(m.Text))
-		if err != nil || freq < 0 || freq > 3 {
-			a.tgClient.SendMessage(ctx, m.Chat.ID, "Укажите число от 0 до 3", nil)
-			return
-		}
+
 		settings := &model.UserSettings{
 			UserID:            m.Chat.ID,
 			Topics:            c.Categories,
 			InfoTypes:         c.InfoTypes,
 			Categories:        c.Categories,
-			Frequency:         freq,
 			Tariff:            "base",
 			LastScheduledSent: 0,
 			LastGetNewsNow:    0,
