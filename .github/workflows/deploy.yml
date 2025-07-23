@@ -10,19 +10,18 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Log in to GHCR
+      - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push image
+      - name: Build & Push image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}:latest
+          tags: ${{ secrets.DOCKERHUB_USER }}/${{ github.repository }}:latest
 
       - name: Deploy to server
         uses: appleboy/ssh-action@v0.1.8
@@ -32,14 +31,14 @@ jobs:
           key: ${{ secrets.DEPLOY_KEY }}
           port: ${{ secrets.DEPLOY_PORT }}
           script: |
-            docker pull ghcr.io/${{ github.repository }}:latest
-            docker stop summary-tasks-bot || true
-            docker rm summary-tasks-bot || true
+            docker pull ${{ secrets.DOCKERHUB_USER }}/${{ github.repository }}:latest
+            docker stop ${{ github.repository }} || true
+            docker rm ${{ github.repository }} || true
             docker run -d --restart unless-stopped \
-              --name summary-tasks-bot \
+              --name ${{ github.repository }} \
               -e TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }} \
               -e OPENAI_TOKEN=${{ secrets.OPENAI_TOKEN }} \
               -e OPENAI_MODEL=${{ secrets.OPENAI_MODEL }} \
               -e OPENAI_BASE_URL=${{ secrets.OPENAI_BASE_URL }} \
               -e DATABASE_URL=${{ secrets.DATABASE_URL }} \
-              ghcr.io/${{ github.repository }}:latest
+              ${{ secrets.DOCKERHUB_USER }}/${{ github.repository }}:latest
