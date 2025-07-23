@@ -5,28 +5,26 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Set up Go
-        uses: actions/setup-go@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v2
         with:
-          go-version: 1.20
-      - name: Build
-        run: go build -o bot ./cmd/bot
-      - name: Test
-        run: go test ./...
-      - name: Copy binary to server
-        uses: appleboy/scp-action@v0.1.4
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_KEY }}
-          port: ${{ secrets.DEPLOY_PORT }}
-          source: "bot"
-          target: ${{ secrets.DEPLOY_PATH }}
-      - name: Restart service
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository }}:latest
+
+      - name: Deploy to server
         uses: appleboy/ssh-action@v0.1.8
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -34,4 +32,14 @@ jobs:
           key: ${{ secrets.DEPLOY_KEY }}
           port: ${{ secrets.DEPLOY_PORT }}
           script: |
-            sudo systemctl restart summary-tasks-bot
+            docker pull ghcr.io/${{ github.repository }}:latest
+            docker stop summary-tasks-bot || true
+            docker rm summary-tasks-bot || true
+            docker run -d --restart unless-stopped \
+              --name summary-tasks-bot \
+              -e TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }} \
+              -e OPENAI_TOKEN=${{ secrets.OPENAI_TOKEN }} \
+              -e OPENAI_MODEL=${{ secrets.OPENAI_MODEL }} \
+              -e OPENAI_BASE_URL=${{ secrets.OPENAI_BASE_URL }} \
+              -e DATABASE_URL=${{ secrets.DATABASE_URL }} \
+              ghcr.io/${{ github.repository }}:latest
