@@ -7,8 +7,8 @@ It is intentionally minimal and uses only the standard library.
 
 The bot understands the following commands:
 
-* `/start` – start receiving periodic updates about default topics.
-* `/update_topics <topic1> <topic2>` – change the topics you are interested in.
+* `/start` – start receiving periodic updates about default categories.
+* `/update_topics <topic1> <topic2>` – update the categories you are interested in.
 * `/get_news_now` – request an immediate news summary based on your preferences.
 * `/my_topics` – show your selected info types and categories.
 * `/stop` – stop receiving updates.
