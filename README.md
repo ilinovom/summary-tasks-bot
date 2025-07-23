@@ -35,3 +35,17 @@ go run ./cmd/bot
 ```
 
 The bot periodically sends messages based on stored user preferences.
+
+### Docker
+
+Build and run the bot in a container:
+
+```bash
+docker build -t summary-tasks-bot .
+docker run --rm \
+  -e TELEGRAM_TOKEN=<token> \
+  -e DATABASE_URL=<connection> \
+  summary-tasks-bot
+```
+
+This image includes the default `options.json` and `tariff.json` files.

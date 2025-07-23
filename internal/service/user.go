@@ -8,9 +8,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/example/summary-tasks-bot/internal/config"
-	"github.com/example/summary-tasks-bot/internal/model"
-	"github.com/example/summary-tasks-bot/internal/repository"
+	"github.com/ilinovom/summary-tasks-bot/internal/config"
+	"github.com/ilinovom/summary-tasks-bot/internal/model"
+	"github.com/ilinovom/summary-tasks-bot/internal/repository"
 )
 
 // AIClient describes the part of the OpenAI client used by the service.

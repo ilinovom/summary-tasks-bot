@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/example/summary-tasks-bot/internal/model"
-	"github.com/example/summary-tasks-bot/internal/repository"
+	"github.com/ilinovom/summary-tasks-bot/internal/model"
+	"github.com/ilinovom/summary-tasks-bot/internal/repository"
 )
 
 type memRepo struct {

@@ -12,12 +12,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/example/summary-tasks-bot/internal/config"
-	"github.com/example/summary-tasks-bot/internal/model"
-	"github.com/example/summary-tasks-bot/internal/repository"
-	"github.com/example/summary-tasks-bot/internal/service"
-	"github.com/example/summary-tasks-bot/pkg/openai"
-	"github.com/example/summary-tasks-bot/pkg/telegram"
+	"github.com/ilinovom/summary-tasks-bot/internal/config"
+	"github.com/ilinovom/summary-tasks-bot/internal/model"
+	"github.com/ilinovom/summary-tasks-bot/internal/repository"
+	"github.com/ilinovom/summary-tasks-bot/internal/service"
+	"github.com/ilinovom/summary-tasks-bot/pkg/openai"
+	"github.com/ilinovom/summary-tasks-bot/pkg/telegram"
 )
 
 type convStage int

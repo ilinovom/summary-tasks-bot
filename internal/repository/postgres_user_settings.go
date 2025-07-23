@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/example/summary-tasks-bot/internal/model"
+	"github.com/ilinovom/summary-tasks-bot/internal/model"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 

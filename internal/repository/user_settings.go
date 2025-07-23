@@ -7,7 +7,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/example/summary-tasks-bot/internal/model"
+	"github.com/ilinovom/summary-tasks-bot/internal/model"
 )
 
 type UserSettingsRepository interface {

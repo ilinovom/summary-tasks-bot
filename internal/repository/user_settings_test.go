@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/example/summary-tasks-bot/internal/model"
+	"github.com/ilinovom/summary-tasks-bot/internal/model"
 )
 
 func TestFileUserSettingsRepository_CRUD(t *testing.T) {
