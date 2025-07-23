@@ -4,9 +4,9 @@ import (
 	"context"
 	"log"
 
-	"github.com/example/summary-tasks-bot/internal/app"
-	"github.com/example/summary-tasks-bot/internal/config"
-	"github.com/example/summary-tasks-bot/internal/repository"
+	"github.com/ilinovom/summary-tasks-bot/internal/app"
+	"github.com/ilinovom/summary-tasks-bot/internal/config"
+	"github.com/ilinovom/summary-tasks-bot/internal/repository"
 )
 
 func main() {
