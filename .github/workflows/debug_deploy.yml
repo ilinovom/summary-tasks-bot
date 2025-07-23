@@ -1,7 +1,8 @@
-name: Debug Deploy
+name: Deploy
 
 on:
-  workflow_dispatch
+  push:
+    branches: [main]
 
 jobs:
   deploy:
@@ -23,14 +24,13 @@ jobs:
           key: ${{ secrets.DEPLOY_KEY }}
           port: ${{ secrets.DEPLOY_PORT }}
           script: |
-            docker pull ${{ secrets.DOCKERHUB_USER }}/${{ github.repository }}:latest
-            docker stop ${{ github.repository }} || true
-            docker rm ${{ github.repository }} || true
+            docker pull ${{ secrets.DOCKERHUB_USER }}/summary-tasks-bot:latest
+            docker stop summary-tasks-bot|| true
+            docker rm summary-tasks-bot|| true
             docker run -d --restart unless-stopped \
-              --name ${{ github.repository }} \
+              --name summary-tasks-bot \
               -e TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }} \
               -e OPENAI_TOKEN=${{ secrets.OPENAI_TOKEN }} \
-              -e OPENAI_MODEL=${{ secrets.OPENAI_MODEL }} \
               -e OPENAI_BASE_URL=${{ secrets.OPENAI_BASE_URL }} \
               -e DATABASE_URL=${{ secrets.DATABASE_URL }} \
-              ${{ secrets.DOCKERHUB_USER }}/${{ github.repository }}:latest
+              ${{ secrets.DOCKERHUB_USER }}/summary-tasks-bot:latest
