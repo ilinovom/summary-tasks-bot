@@ -1,8 +1,8 @@
-name: Deploy
+name: Deploy debug
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
+
 
 jobs:
   deploy:
