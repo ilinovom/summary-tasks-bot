@@ -28,32 +28,19 @@ func NewUserService(repo repository.UserSettingsRepository, ai AIClient, tariffs
 	return &UserService{repo: repo, openai: ai, tariffs: tariffs}
 }
 
-// Start activates a user with default topics.
+// Start activates a user with default settings.
 func (s *UserService) Start(ctx context.Context, userID int64) error {
 	settings, err := s.repo.Get(ctx, userID)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
-		settings = &model.UserSettings{UserID: userID, Topics: []string{"golang"}}
-	}
-	if len(settings.Topics) == 0 {
-		settings.Topics = []string{"golang"}
+		settings = &model.UserSettings{UserID: userID}
 	}
 	if settings.Tariff == "" {
 		settings.Tariff = "base"
 	}
 	settings.Active = true
-	return s.repo.Save(ctx, settings)
-}
-
-// UpdateTopics sets the topics for the user.
-func (s *UserService) UpdateTopics(ctx context.Context, userID int64, topics []string) error {
-	settings, err := s.repo.Get(ctx, userID)
-	if err != nil {
-		return err
-	}
-	settings.Topics = topics
 	return s.repo.Save(ctx, settings)
 }
 
@@ -67,7 +54,7 @@ func (s *UserService) Stop(ctx context.Context, userID int64) error {
 	return s.repo.Save(ctx, settings)
 }
 
-// GetNews returns news about the provided topics using the OpenAI API.
+// GetNews returns news according to the user preferences using the OpenAI API.
 func (s *UserService) GetNews(ctx context.Context, u *model.UserSettings) (string, error) {
 	info := ""
 	if len(u.InfoTypes) > 0 {

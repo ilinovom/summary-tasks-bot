@@ -343,7 +343,6 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 
 		settings := &model.UserSettings{
 			UserID:            m.Chat.ID,
-			Topics:            c.Categories,
 			InfoTypes:         c.InfoTypes,
 			Categories:        c.Categories,
 			Tariff:            "base",
@@ -356,6 +355,12 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			log.Println("save settings:", err)
 		} else {
 			a.tgClient.SendMessage(ctx, m.Chat.ID, "Настройки сохранены", nil)
+			msg, err := a.userService.GetNews(ctx, settings)
+			if err == nil {
+				a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
+			} else {
+				log.Println("get news:", err)
+			}
 		}
 		delete(a.convs, m.Chat.ID)
 	}
