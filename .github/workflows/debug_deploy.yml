@@ -1,5 +1,9 @@
 name: Deploy
 
+on:
+  # Trigger manually
+  workflow_dispatch:
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
