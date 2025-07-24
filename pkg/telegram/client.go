@@ -17,13 +17,20 @@ type Update struct {
 }
 
 type Message struct {
-	MessageID int    `json:"message_id"`
-	Chat      Chat   `json:"chat"`
-	Text      string `json:"text"`
+	MessageID int      `json:"message_id"`
+	Chat      Chat     `json:"chat"`
+	Text      string   `json:"text"`
+	User      FromUser `json:"from"`
 }
 
 type Chat struct {
 	ID int64 `json:"id"`
+}
+
+type FromUser struct {
+	ID       int64  `json:"id"`
+	Name     string `json:"first_name"`
+	Username string `json:"username"`
 }
 
 // Client is a minimal Telegram Bot API client.
@@ -105,6 +112,7 @@ func (c *Client) GetUpdates(ctx context.Context, offset int) ([]Update, error) {
 		OK     bool     `json:"ok"`
 		Result []Update `json:"result"`
 	}
+
 	if err := json.NewDecoder(resp.Body).Decode(&wrapper); err != nil {
 		return nil, err
 	}
