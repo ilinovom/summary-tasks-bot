@@ -33,6 +33,7 @@ type conversationState struct {
 	Stage         convStage
 	Step          int
 	CurrentCat    string
+	OldCat        string
 	Topics        map[string][]string
 	UpdateTopics  bool
 	CategoryLimit int
@@ -301,10 +302,10 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		}
 		a.tgClient.DeleteMessage(ctx, m.Chat.ID, m.MessageID)
 		a.tgClient.DeleteMessage(ctx, m.Chat.ID, c.LastMsgID)
-		c.CurrentCat = cats[0]
-		c.Stage = stageInfoTypes
-		prompt := fmt.Sprintf("Выберите типы информации для категории '%s':\n%s\nВведите номера через запятую (не более %d).", c.CurrentCat, formatOptions(a.infoOptions), c.InfoLimit)
-		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.infoOptions)))
+		c.OldCat = cats[0]
+		c.Stage = stageCategory
+		prompt := fmt.Sprintf("Выберите новую категорию вместо '%s':\n%s\nВведите номер.", c.OldCat, formatOptions(a.categoryOptions))
+		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.categoryOptions)))
 		c.LastMsgID = msgID
 
 	case stageCategory:
@@ -333,6 +334,10 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		a.tgClient.DeleteMessage(ctx, m.Chat.ID, c.LastMsgID)
 		if c.Topics == nil {
 			c.Topics = map[string][]string{}
+		}
+		if c.OldCat != "" {
+			delete(c.Topics, c.OldCat)
+			c.OldCat = ""
 		}
 		existing := c.Topics[c.CurrentCat]
 		for _, inf := range infos {
@@ -510,7 +515,10 @@ func (a *App) handleUpdateTopicsCommand(ctx context.Context, m *telegram.Message
 	conv := &conversationState{UpdateTopics: true, CategoryLimit: tariff.CategoryNumLimit, InfoLimit: tariff.InfoTypeNumLimit}
 	if err == nil && len(settings.Topics) > 0 {
 		conv.Stage = stageUpdateChoice
-		conv.Topics = settings.Topics
+		conv.Topics = make(map[string][]string, len(settings.Topics))
+		for k, v := range settings.Topics {
+			conv.Topics[k] = append([]string(nil), v...)
+		}
 		a.convs[m.Chat.ID] = conv
 		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Что будем обновлять?\n1. Обновить все\n2. Обновить одну", [][]string{{"1", "2"}})
 		conv.LastMsgID = msgID
