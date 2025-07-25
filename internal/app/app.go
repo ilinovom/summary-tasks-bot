@@ -267,6 +267,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			c.LastMsgID = msg
 			return
 		}
+		a.tgClient.DeleteMessage(ctx, m.Chat.ID, m.MessageID)
 		a.tgClient.DeleteMessage(ctx, m.Chat.ID, c.LastMsgID)
 		c.CurrentCat = cats[0]
 		c.Stage = stageInfoTypes
@@ -281,11 +282,25 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			c.LastMsgID = msg
 			return
 		}
+		a.tgClient.DeleteMessage(ctx, m.Chat.ID, m.MessageID)
 		a.tgClient.DeleteMessage(ctx, m.Chat.ID, c.LastMsgID)
 		if c.Topics == nil {
 			c.Topics = map[string][]string{}
 		}
-		c.Topics[c.CurrentCat] = infos
+		existing := c.Topics[c.CurrentCat]
+		for _, inf := range infos {
+			found := false
+			for _, ex := range existing {
+				if ex == inf {
+					found = true
+					break
+				}
+			}
+			if !found {
+				existing = append(existing, inf)
+			}
+		}
+		c.Topics[c.CurrentCat] = existing
 		c.Step++
 		if c.Step >= c.CategoryLimit {
 			var settings *model.UserSettings
