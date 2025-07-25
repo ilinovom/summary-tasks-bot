@@ -360,7 +360,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		a.tgClient.DeleteMessage(ctx, m.Chat.ID, c.LastMsgID)
 		if c.AllowCustomCategory && cats[0] == "Своя категория" {
 			c.Stage = stageCustomCategory
-			msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Введите свою категорию (2-3 слова)", nil)
+			msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Введите свою категорию (1-3 слова)", nil)
 			c.LastMsgID = msgID
 			return
 		}
@@ -372,8 +372,8 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 
 	case stageCustomCategory:
 		words := strings.Fields(m.Text)
-		if len(words) < 2 || len(words) > 3 {
-			msg, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Введите от 2 до 3 слов", nil)
+		if len(words) < 1 || len(words) > 3 {
+			msg, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Введите от 1 до 3 слов", nil)
 			c.LastMsgID = msg
 			return
 		}
@@ -523,34 +523,69 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		}
 		a.tgClient.DeleteMessage(ctx, m.Chat.ID, m.MessageID)
 		a.tgClient.DeleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+
+		msgWait, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Подождите, ищу информацию в интернете...", numberKeyboard(len(c.AvailableCats)))
+
 		msg, err := a.userService.GetLast24hNewsForCategory(ctx, c.Settings, cats[0])
 		if err != nil {
 			log.Println("get news:", err)
 			delete(a.convs, m.Chat.ID)
 			return
 		}
-		_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
+
+		err = a.tgClient.DeleteMessage(ctx, m.Chat.ID, msgWait)
+		if err != nil {
+			log.Println("delete msg err: ", err)
+		}
+
+		_, err = a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
+		if err != nil {
+			log.Println("send msg err: ", err)
+		}
 		delete(a.convs, m.Chat.ID)
 	}
 }
 
-const startMsg = `Привет! Я бот для расширения кругозора.
-Что я умею?
+const startMsg = `<b>Привет! Я бот для расширения кругозора</b>.
+
+<b>Что я умею?</b>
 	- по выбранной категории и типу информации присылать тебе сообщения, которые будут развивать твой кругозор.
 
-Как часто можно получать сообщения?
-1) На бесплатном тарифе можно:
-	- получать до 5 сообщений моментально (команда /get_news_now)
-	- получать сообщения каждые 3 часа в интервале с 08:00 до 23:00
-   * суммарно можно получить за день 8 сообщений
-2) Другие тарифы пока прорабатываются ...
+<b>Как я это делаю?</b>
+	- генерирую сообщения, используя GPT модель
 
-Какие у меня есть команды?
+<b>Какие возможности у меня есть?</b>
+
+1) <b>Что входит в тариф <u>base</u></b>:
+	- выбор <b>2</b> категорий из списка
+	- выбор до <b>2</b> типов информации для каждой категории
+	- получение каждый день до <b>5</b> сообщений моментально (команда /get_news_now)
+	- получение каждый день сообщений по выбранным категориям каждые <b>3</b> часа в интервале <b>с 08:00 до 22:00</b>
+	- ответы генерируются с помощью стандартной модели GPT
+
+2) <b>Что входит в тариф <u>plus</u></b>:
+	- выбор <b>4</b> категорий из списка
+	- выбор до <b>4</b> типов информации для каждой категории
+	- получение каждый день до <b>10</b> сообщений моментально (команда /get_news_now)
+	- получение каждый день сообщений по выбранным категориям каждые <b>1.5</b> часа в интервале <b>с 06:00 до 23:00</b>
+	- ответы генерируются с помощью улучшенной модели GPT
+	- выбор своих личных категорий
+	- получение актуальных новостей за последние 24 часа <b>1</b> раз в день (команда /get_last_24h_news)
+
+3) <b>Что входит в тариф <u>premium</u></b>:
+	...
+
+4) <b>Что входит в тариф <u>ultimate</u></b>:
+	...
+
+<b>Какие у меня есть команды?</b>
 	- /start для старта/возобновления отправки сообщений.
 	- /update_topics для обновления типов и категорий.
+	- /get_last_24h_news получить новости за последние 24 часа по одной из категорий
 	- /get_news_now, чтобы получить информацию прямо сейчас.
 	- /my_topics, чтобы получить установленные категории и типы информации.
-	- /stop, чтобы остановить отправку сообщений.`
+	- /stop, чтобы остановить отправку сообщений.
+`
 
 func (a *App) handleStartCommand(ctx context.Context, m *telegram.Message) {
 	log.Printf("user %d (@%s) called /start", m.Chat.ID, m.Chat.Username)

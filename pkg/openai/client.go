@@ -5,7 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"regexp"
 )
 
 type Client struct {
@@ -40,10 +43,28 @@ func (c *Client) do(ctx context.Context, endpoint string, body any, out any) err
 	if err != nil {
 		return err
 	}
+	ba, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(ba, out)
+	if err != nil {
+		return err
+	}
+	return nil
+
+	fmt.Println(string(ba))
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return errors.New("openai: unexpected status " + resp.Status)
 	}
+
+	err = json.NewDecoder(resp.Body).Decode(out)
+	if err != nil {
+		return err
+	}
+
 	return json.NewDecoder(resp.Body).Decode(out)
 }
 
@@ -51,9 +72,33 @@ func (c *Client) do(ctx context.Context, endpoint string, body any, out any) err
 func (c *Client) ChatCompletion(ctx context.Context, model, prompt string) (string, error) {
 
 	reqBody := map[string]any{
-		"model":    model,
-		"messages": []map[string]string{{"role": "user", "content": prompt}},
+		"model": model,
+		"messages": []map[string]string{
+			{"role": "user", "content": prompt},
+		},
 	}
+
+	// Пример добавления функции поиска
+	reqBody["tools"] = []map[string]any{
+		{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "web_search",
+				"description": "Search the web for information",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"query": map[string]string{
+							"type":        "string",
+							"description": "Search query",
+						},
+					},
+					"required": []string{"query"},
+				},
+			},
+		},
+	}
+
 	var respBody struct {
 		Choices []struct {
 			Message struct {
@@ -68,4 +113,47 @@ func (c *Client) ChatCompletion(ctx context.Context, model, prompt string) (stri
 		return "", errors.New("openai: empty response")
 	}
 	return respBody.Choices[0].Message.Content, nil
+}
+
+// ChatResponses
+func (c *Client) ChatResponses(ctx context.Context, model, prompt string) (string, error) {
+
+	reqBody := map[string]any{
+		"model": model,
+		"input": []map[string]string{{"role": "user", "content": prompt}},
+	}
+
+	if true {
+		reqBody["tools"] = []map[string]string{{"type": "web_search_preview"}}
+	}
+
+	var respBody struct {
+		Output []struct {
+			Type    string `json:"type"`
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"output"`
+	}
+	if err := c.do(ctx, "/responses", reqBody, &respBody); err != nil {
+		return "", err
+	}
+	if len(respBody.Output) == 0 {
+		return "", errors.New("openai: empty response")
+	}
+
+	return markdownToTelegramHTML(respBody.Output[1].Content[0].Text), nil
+}
+
+func markdownToTelegramHTML(input string) string {
+	// Жирный
+	reBold := regexp.MustCompile(`\*\*(.*?)\*\*`)
+	input = reBold.ReplaceAllString(input, "<b>$1</b>")
+
+	// Ссылки [text](url)
+	reLink := regexp.MustCompile(`\[(.*?)\]\((.*?)\)`)
+	input = reLink.ReplaceAllString(input, `<a href="$2">$1</a>`)
+
+	return input
 }

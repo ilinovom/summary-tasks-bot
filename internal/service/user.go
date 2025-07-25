@@ -16,6 +16,7 @@ import (
 // AIClient describes the part of the OpenAI client used by the service.
 type AIClient interface {
 	ChatCompletion(ctx context.Context, model, prompt string) (string, error)
+	ChatResponses(ctx context.Context, model, prompt string) (string, error)
 }
 
 type UserService struct {
@@ -156,7 +157,7 @@ func (s *UserService) GetLast24hNewsForCategory(ctx context.Context, u *model.Us
 	if s.openai == nil {
 		resp = prompt
 	} else {
-		resp, err = s.openai.ChatCompletion(ctx, t.GptModelVersion, prompt)
+		resp, err = s.openai.ChatResponses(ctx, t.GptModelVersion, prompt)
 		if err != nil {
 			return "", err
 		}
