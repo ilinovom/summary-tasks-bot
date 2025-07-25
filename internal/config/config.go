@@ -20,6 +20,8 @@ type Tariff struct {
 	Style                              string `json:"style"`
 	Volume                             string `json:"volume"`
 	GptModelVersion                    string `json:"gpt_model_version"`
+	CategoryNumLimit                   int    `json:"category_num_limit"`
+	InfoTypeNumLimit                   int    `json:"info_type_num_limit"`
 }
 
 type Config struct {

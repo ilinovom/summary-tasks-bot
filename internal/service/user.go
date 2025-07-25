@@ -57,12 +57,17 @@ func (s *UserService) Stop(ctx context.Context, userID int64) error {
 // GetNews returns news according to the user preferences using the OpenAI API.
 func (s *UserService) GetNews(ctx context.Context, u *model.UserSettings) (string, error) {
 	info := ""
-	if len(u.InfoTypes) > 0 {
-		info = u.InfoTypes[rand.Intn(len(u.InfoTypes))]
-	}
 	category := ""
-	if len(u.Categories) > 0 {
-		category = u.Categories[rand.Intn(len(u.Categories))]
+	if len(u.Topics) > 0 {
+		cats := make([]string, 0, len(u.Topics))
+		for c := range u.Topics {
+			cats = append(cats, c)
+		}
+		category = cats[rand.Intn(len(cats))]
+		infos := u.Topics[category]
+		if len(infos) > 0 {
+			info = infos[rand.Intn(len(infos))]
+		}
 	}
 	t, ok := s.tariffs[u.Tariff]
 	if !ok {

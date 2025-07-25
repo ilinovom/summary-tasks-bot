@@ -17,7 +17,7 @@ func TestFileUserSettingsRepository_CRUD(t *testing.T) {
 		t.Fatalf("new repo: %v", err)
 	}
 	ctx := context.Background()
-	s := &model.UserSettings{UserID: 1, Categories: []string{"go"}, Active: true}
+	s := &model.UserSettings{UserID: 1, Topics: map[string][]string{"go": {"tips"}}, Active: true}
 	if err := repo.Save(ctx, s); err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -25,7 +25,7 @@ func TestFileUserSettingsRepository_CRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if got.UserID != s.UserID || got.Categories[0] != "go" || !got.Active {
+	if got.UserID != s.UserID || len(got.Topics["go"]) == 0 || !got.Active {
 		t.Fatalf("unexpected data: %#v", got)
 	}
 	if err := repo.Delete(ctx, 1); err != nil {

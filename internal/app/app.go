@@ -23,15 +23,19 @@ import (
 type convStage int
 
 const (
-	stageInfoTypes convStage = iota + 1
-	stageCategories
+	stageCategory convStage = iota + 1
+	stageInfoTypes
 )
 
 type conversationState struct {
-	Stage        convStage
-	InfoTypes    []string
-	Categories   []string
-	UpdateTopics bool
+	Stage         convStage
+	Step          int
+	CurrentCat    string
+	Topics        map[string][]string
+	UpdateTopics  bool
+	CategoryLimit int
+	InfoLimit     int
+	LastMsgID     int
 }
 
 func formatOptions(opts []string) string {
@@ -58,6 +62,22 @@ func parseSelection(text string, opts []string, limit int) []string {
 		}
 	}
 	return out
+}
+
+func numberKeyboard(n int) [][]string {
+	rows := [][]string{}
+	row := []string{}
+	for i := 1; i <= n; i++ {
+		row = append(row, strconv.Itoa(i))
+		if len(row) == 5 {
+			rows = append(rows, row)
+			row = []string{}
+		}
+	}
+	if len(row) > 0 {
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 // App coordinates the services and telegram client.
@@ -159,7 +179,7 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 	default:
 		log.Printf("user %d(@%s) texted: %s", m.Chat.ID, m.Chat.Username, m.Text)
 		promt := "Я не понимаю текст вне команд. Чтобы увидеть команды, нажми кнопку `Меню` или вызови команду  `/start`"
-		a.tgClient.SendMessage(ctx, m.Chat.ID, promt, nil)
+		_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, promt, nil)
 	}
 }
 
@@ -213,7 +233,7 @@ func (a *App) scheduleMessages(ctx context.Context) {
 					log.Println("get news:", err)
 					continue
 				}
-				a.tgClient.SendMessage(ctx, u.UserID, msg, nil)
+				_, _ = a.tgClient.SendMessage(ctx, u.UserID, msg, nil)
 				log.Printf("user %d(@%s) got scheduled news", u.UserID, u.UserName)
 
 				u.LastScheduledSent = now.Unix()
@@ -240,57 +260,93 @@ func (a *App) setCommands(ctx context.Context) {
 
 func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *conversationState) {
 	switch c.Stage {
+	case stageCategory:
+		cats := parseSelection(m.Text, a.categoryOptions, 1)
+		if len(cats) == 0 {
+			msg, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Выберите номер категории", numberKeyboard(len(a.categoryOptions)))
+			c.LastMsgID = msg
+			return
+		}
+		a.tgClient.DeleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+		c.CurrentCat = cats[0]
+		c.Stage = stageInfoTypes
+		prompt := fmt.Sprintf("Выберите типы информации для категории '%s':\n%s\nВведите номера через запятую (не более %d).", c.CurrentCat, formatOptions(a.infoOptions), c.InfoLimit)
+		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.infoOptions)))
+		c.LastMsgID = msgID
+
 	case stageInfoTypes:
-		c.InfoTypes = parseSelection(m.Text, a.infoOptions, 5)
-		c.Stage = stageCategories
-		prompt := "Выберите категории или топики:\n" + formatOptions(a.categoryOptions) + "\nВведите номера через запятую (не более 5)."
-		a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, nil)
-	case stageCategories:
-		c.Categories = parseSelection(m.Text, a.categoryOptions, 5)
-		if c.UpdateTopics {
-			settings, err := a.repo.Get(ctx, m.Chat.ID)
-			if err != nil && !errors.Is(err, os.ErrNotExist) {
-				log.Println("save settings:", err)
+		infos := parseSelection(m.Text, a.infoOptions, c.InfoLimit)
+		if len(infos) == 0 {
+			msg, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Введите номера типов информации", numberKeyboard(len(a.infoOptions)))
+			c.LastMsgID = msg
+			return
+		}
+		a.tgClient.DeleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+		if c.Topics == nil {
+			c.Topics = map[string][]string{}
+		}
+		c.Topics[c.CurrentCat] = infos
+		c.Step++
+		if c.Step >= c.CategoryLimit {
+			var settings *model.UserSettings
+			var err error
+			if c.UpdateTopics {
+				settings, err = a.repo.Get(ctx, m.Chat.ID)
+				if err != nil && !errors.Is(err, os.ErrNotExist) {
+					log.Println("save settings:", err)
+					delete(a.convs, m.Chat.ID)
+					return
+				}
+				if err != nil && errors.Is(err, os.ErrNotExist) {
+					settings = &model.UserSettings{UserID: m.Chat.ID, UserName: m.Chat.Username}
+				}
+				settings.Topics = c.Topics
+				if err := a.repo.Save(ctx, settings); err != nil {
+					log.Println("save settings:", err)
+				} else {
+					parts := []string{}
+					for cat, types := range c.Topics {
+						parts = append(parts, fmt.Sprintf("%s: %s", cat, strings.Join(types, ", ")))
+					}
+					_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, "Настройки обновлены:\n"+strings.Join(parts, "\n"), nil)
+				}
 				delete(a.convs, m.Chat.ID)
 				return
 			}
-			if err != nil && errors.Is(err, os.ErrNotExist) {
-				settings = &model.UserSettings{UserID: m.Chat.ID, UserName: m.Chat.Username}
+
+			settings = &model.UserSettings{
+				UserID:            m.Chat.ID,
+				UserName:          m.Chat.Username,
+				Topics:            c.Topics,
+				Tariff:            "base",
+				LastScheduledSent: 0,
+				LastGetNewsNow:    0,
+				GetNewsNowCount:   0,
+				Active:            true,
 			}
-			settings.InfoTypes = c.InfoTypes
-			settings.Categories = c.Categories
 			if err := a.repo.Save(ctx, settings); err != nil {
 				log.Println("save settings:", err)
 			} else {
-				a.tgClient.SendMessage(ctx, m.Chat.ID, "Настройки обновлены", nil)
+				parts := []string{}
+				for cat, types := range c.Topics {
+					parts = append(parts, fmt.Sprintf("%s: %s", cat, strings.Join(types, ", ")))
+				}
+				_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, "Настройки сохранены:\n"+strings.Join(parts, "\n"), nil)
+				msg, err := a.userService.GetNews(ctx, settings)
+				if err == nil {
+					_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
+				} else {
+					log.Println("get news:", err)
+				}
 			}
 			delete(a.convs, m.Chat.ID)
 			return
 		}
 
-		settings := &model.UserSettings{
-			UserID:            m.Chat.ID,
-			UserName:          m.Chat.Username,
-			InfoTypes:         c.InfoTypes,
-			Categories:        c.Categories,
-			Tariff:            "base",
-			LastScheduledSent: 0,
-			LastGetNewsNow:    0,
-			GetNewsNowCount:   0,
-			Active:            true,
-		}
-		if err := a.repo.Save(ctx, settings); err != nil {
-			log.Println("save settings:", err)
-		} else {
-			a.tgClient.SendMessage(ctx, m.Chat.ID, "Настройки сохранены", nil)
-			msg, err := a.userService.GetNews(ctx, settings)
-			if err == nil {
-				a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
-			} else {
-				log.Println("get news:", err)
-			}
-		}
-		delete(a.convs, m.Chat.ID)
+		c.Stage = stageCategory
+		prompt := fmt.Sprintf("Выберите категорию №%d:\n%s\nВведите номер.", c.Step+1, formatOptions(a.categoryOptions))
+		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.categoryOptions)))
+		c.LastMsgID = msgID
 	}
 }
 
@@ -315,20 +371,23 @@ const startMsg = `Привет! Я бот для расширения круго
 func (a *App) handleStartCommand(ctx context.Context, m *telegram.Message) {
 	log.Printf("user %d (@%s) called /start", m.Chat.ID, m.Chat.Username)
 	if _, err := a.repo.Get(ctx, m.Chat.ID); err != nil {
-		err := a.tgClient.SendMessage(ctx, m.Chat.ID, startMsg, nil)
+		_, err := a.tgClient.SendMessage(ctx, m.Chat.ID, startMsg, nil)
 		if err != nil {
 			log.Printf("error when sending message to chat id %v: %v", m.Chat.ID, err)
 		}
 		time.Sleep(time.Second * 5)
-		a.convs[m.Chat.ID] = &conversationState{Stage: stageInfoTypes}
-		prompt := "Какую информацию вы хотели бы получать?\n" + formatOptions(a.infoOptions) + "\nВведите номера через запятую (не более 5)."
-		a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, nil)
+		t := a.cfg.Tariffs["base"]
+		conv := &conversationState{Stage: stageCategory, CategoryLimit: t.CategoryNumLimit, InfoLimit: t.InfoTypeNumLimit}
+		a.convs[m.Chat.ID] = conv
+		prompt := fmt.Sprintf("Выберите категорию №1:\n%s\nВведите номер.", formatOptions(a.categoryOptions))
+		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.categoryOptions)))
+		conv.LastMsgID = msgID
 		return
 	}
 	if err := a.userService.Start(ctx, m.Chat.ID, m.Chat.Username); err != nil {
 		log.Println("start:", err)
 	} else {
-		err := a.tgClient.SendMessage(ctx, m.Chat.ID, startMsg, nil)
+		_, err := a.tgClient.SendMessage(ctx, m.Chat.ID, startMsg, nil)
 		if err != nil {
 			log.Printf("error when sending message to chat id %v: %v", m.Chat.ID, err)
 		}
@@ -340,7 +399,7 @@ func (a *App) handleStopCommand(ctx context.Context, m *telegram.Message) {
 	if err := a.userService.Stop(ctx, m.Chat.ID); err != nil {
 		log.Println("stop:", err)
 	} else {
-		a.tgClient.SendMessage(ctx, m.Chat.ID, "Stopped updates", nil)
+		_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, "Stopped updates", nil)
 	}
 }
 
@@ -361,7 +420,7 @@ func (a *App) handleGetNewsNowCommand(ctx context.Context, m *telegram.Message) 
 		settings.GetNewsNowCount = 0
 	}
 	if settings.GetNewsNowCount >= tariff.NumberGetNewsNowMessagesPerDay {
-		a.tgClient.SendMessage(ctx, m.Chat.ID, "Лимит исчерпан на сегодня", nil)
+		_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, "Лимит исчерпан на сегодня", nil)
 		return
 	}
 	settings.GetNewsNowCount++
@@ -374,25 +433,35 @@ func (a *App) handleGetNewsNowCommand(ctx context.Context, m *telegram.Message) 
 		log.Println("get_news_now:", err)
 		return
 	}
-	a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
+	_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
 }
 
 func (a *App) handleUpdateTopicsCommand(ctx context.Context, m *telegram.Message) {
 	log.Printf("user %d(@%s) called /update_topics", m.Chat.ID, m.Chat.Username)
-	a.convs[m.Chat.ID] = &conversationState{Stage: stageInfoTypes, UpdateTopics: true}
-	prompt := "Какую информацию вы хотели бы получать?\n" + formatOptions(a.infoOptions) + "\nВведите номера через запятую (не более 5)."
-	a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, nil)
+	tariff := a.cfg.Tariffs["base"]
+	if s, err := a.repo.Get(ctx, m.Chat.ID); err == nil {
+		if t, ok := a.cfg.Tariffs[s.Tariff]; ok {
+			tariff = t
+		}
+	}
+	conv := &conversationState{Stage: stageCategory, UpdateTopics: true, CategoryLimit: tariff.CategoryNumLimit, InfoLimit: tariff.InfoTypeNumLimit}
+	a.convs[m.Chat.ID] = conv
+	prompt := fmt.Sprintf("Выберите категорию №1:\n%s\nВведите номер.", formatOptions(a.categoryOptions))
+	msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.categoryOptions)))
+	conv.LastMsgID = msgID
 }
 
 func (a *App) handleMyTopicsCommand(ctx context.Context, m *telegram.Message) {
 	log.Printf("user %d(@%s) called /my_topics", m.Chat.ID, m.Chat.Username)
 	settings, err := a.repo.Get(ctx, m.Chat.ID)
 	if err != nil {
-		a.tgClient.SendMessage(ctx, m.Chat.ID, "Use /start first", nil)
+		_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, "Use /start first", nil)
 		return
 	}
-	info := strings.Join(settings.InfoTypes, ", ")
-	cats := strings.Join(settings.Categories, ", ")
-	msg := fmt.Sprintf("Ваши типы: %s\nВаши категории: %s", info, cats)
-	a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
+	parts := []string{}
+	for cat, types := range settings.Topics {
+		parts = append(parts, fmt.Sprintf("%s: %s", cat, strings.Join(types, ", ")))
+	}
+	msg := "Ваши темы:\n" + strings.Join(parts, "\n")
+	_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
 }
