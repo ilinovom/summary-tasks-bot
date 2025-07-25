@@ -32,6 +32,7 @@ func (r *PostgresUserSettingsRepository) init() error {
 	_, err := r.db.Exec(`
         CREATE TABLE IF NOT EXISTS user_settings (
             user_id BIGINT PRIMARY KEY,
+            username TEXT,
             active BOOLEAN,
             info_types JSONB,
             categories JSONB,
@@ -41,14 +42,18 @@ func (r *PostgresUserSettingsRepository) init() error {
             last_get_news_now BIGINT,
             get_news_now_count INTEGER
         )`)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.Exec(`ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS username TEXT`)
 	return err
 }
 
 func (r *PostgresUserSettingsRepository) Get(ctx context.Context, userID int64) (*model.UserSettings, error) {
-	row := r.db.QueryRowContext(ctx, `SELECT user_id, active, info_types, categories, frequency, tariff, last_scheduled_sent, last_get_news_now, get_news_now_count FROM user_settings WHERE user_id=$1`, userID)
+	row := r.db.QueryRowContext(ctx, `SELECT user_id, username, active, info_types, categories, frequency, tariff, last_scheduled_sent, last_get_news_now, get_news_now_count FROM user_settings WHERE user_id=$1`, userID)
 	var s model.UserSettings
 	var infoTypes, categories []byte
-	if err := row.Scan(&s.UserID, &s.Active, &infoTypes, &categories, &s.Frequency, &s.Tariff, &s.LastScheduledSent, &s.LastGetNewsNow, &s.GetNewsNowCount); err != nil {
+	if err := row.Scan(&s.UserID, &s.UserName, &s.Active, &infoTypes, &categories, &s.Frequency, &s.Tariff, &s.LastScheduledSent, &s.LastGetNewsNow, &s.GetNewsNowCount); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errors.New("not found")
 		}
@@ -69,9 +74,10 @@ func (r *PostgresUserSettingsRepository) Save(ctx context.Context, settings *mod
 		return err
 	}
 	_, err = r.db.ExecContext(ctx, `
-        INSERT INTO user_settings (user_id, active, info_types, categories, frequency, tariff, last_scheduled_sent, last_get_news_now, get_news_now_count)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+        INSERT INTO user_settings (user_id, username, active, info_types, categories, frequency, tariff, last_scheduled_sent, last_get_news_now, get_news_now_count)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
         ON CONFLICT (user_id) DO UPDATE SET
+            username=EXCLUDED.username,
             active=EXCLUDED.active,
             info_types=EXCLUDED.info_types,
             categories=EXCLUDED.categories,
@@ -80,7 +86,7 @@ func (r *PostgresUserSettingsRepository) Save(ctx context.Context, settings *mod
             last_scheduled_sent=EXCLUDED.last_scheduled_sent,
             last_get_news_now=EXCLUDED.last_get_news_now,
             get_news_now_count=EXCLUDED.get_news_now_count
-    `, settings.UserID, settings.Active, string(infoTypes), string(categories), settings.Frequency, settings.Tariff, settings.LastScheduledSent, settings.LastGetNewsNow, settings.GetNewsNowCount)
+    `, settings.UserID, settings.UserName, settings.Active, string(infoTypes), string(categories), settings.Frequency, settings.Tariff, settings.LastScheduledSent, settings.LastGetNewsNow, settings.GetNewsNowCount)
 	return err
 }
 
@@ -90,7 +96,7 @@ func (r *PostgresUserSettingsRepository) Delete(ctx context.Context, userID int6
 }
 
 func (r *PostgresUserSettingsRepository) List(ctx context.Context) ([]*model.UserSettings, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT user_id, active, info_types, categories, frequency, tariff, last_scheduled_sent, last_get_news_now, get_news_now_count FROM user_settings`)
+	rows, err := r.db.QueryContext(ctx, `SELECT user_id, username, active, info_types, categories, frequency, tariff, last_scheduled_sent, last_get_news_now, get_news_now_count FROM user_settings`)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +105,7 @@ func (r *PostgresUserSettingsRepository) List(ctx context.Context) ([]*model.Use
 	for rows.Next() {
 		var s model.UserSettings
 		var infoTypes, categories []byte
-		if err := rows.Scan(&s.UserID, &s.Active, &infoTypes, &categories, &s.Frequency, &s.Tariff, &s.LastScheduledSent, &s.LastGetNewsNow, &s.GetNewsNowCount); err != nil {
+		if err := rows.Scan(&s.UserID, &s.UserName, &s.Active, &infoTypes, &categories, &s.Frequency, &s.Tariff, &s.LastScheduledSent, &s.LastGetNewsNow, &s.GetNewsNowCount); err != nil {
 			return nil, err
 		}
 		json.Unmarshal(infoTypes, &s.InfoTypes)

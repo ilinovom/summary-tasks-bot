@@ -52,7 +52,7 @@ func TestUserService_StartStop(t *testing.T) {
 	svc := NewUserService(repo, nil, nil)
 	ctx := context.Background()
 
-	if err := svc.Start(ctx, 1); err != nil {
+	if err := svc.Start(ctx, 1, "testuser"); err != nil {
 		t.Fatalf("start: %v", err)
 	}
 	u, _ := repo.Get(ctx, 1)

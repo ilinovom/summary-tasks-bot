@@ -29,13 +29,13 @@ func NewUserService(repo repository.UserSettingsRepository, ai AIClient, tariffs
 }
 
 // Start activates a user with default settings.
-func (s *UserService) Start(ctx context.Context, userID int64) error {
+func (s *UserService) Start(ctx context.Context, userID int64, userName string) error {
 	settings, err := s.repo.Get(ctx, userID)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
-		settings = &model.UserSettings{UserID: userID}
+		settings = &model.UserSettings{UserID: userID, UserName: userName}
 	}
 	if settings.Tariff == "" {
 		settings.Tariff = "base"
@@ -78,7 +78,6 @@ func (s *UserService) GetNews(ctx context.Context, u *model.UserSettings) (strin
 	if s.openai == nil {
 		resp = prompt
 	} else {
-		log.Println("calling OpenAI")
 		resp, err = s.openai.ChatCompletion(ctx, t.GptModelVersion, prompt)
 		if err != nil {
 			return "", err
