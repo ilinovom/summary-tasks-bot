@@ -57,12 +57,56 @@ func (s *UserService) Stop(ctx context.Context, userID int64) error {
 // GetNews returns news according to the user preferences using the OpenAI API.
 func (s *UserService) GetNews(ctx context.Context, u *model.UserSettings) (string, error) {
 	info := ""
-	if len(u.InfoTypes) > 0 {
-		info = u.InfoTypes[rand.Intn(len(u.InfoTypes))]
-	}
 	category := ""
-	if len(u.Categories) > 0 {
-		category = u.Categories[rand.Intn(len(u.Categories))]
+	if len(u.Topics) > 0 {
+		cats := make([]string, 0, len(u.Topics))
+		for c := range u.Topics {
+			cats = append(cats, c)
+		}
+		category = cats[rand.Intn(len(cats))]
+		infos := u.Topics[category]
+		if len(infos) > 0 {
+			info = infos[rand.Intn(len(infos))]
+		}
+	}
+	t, ok := s.tariffs[u.Tariff]
+	if !ok {
+		log.Fatal("tariff for user is not set", u.UserID)
+	}
+	prompt := t.Prompt
+	prompt = strings.ReplaceAll(prompt, "{тип}", info)
+	prompt = strings.ReplaceAll(prompt, "{категория}", category)
+	prompt = strings.ReplaceAll(prompt, "{тон}", t.Style)
+	prompt = strings.ReplaceAll(prompt, "{объём}", t.Volume)
+	var resp string
+	var err error
+	if s.openai == nil {
+		resp = prompt
+	} else {
+		resp, err = s.openai.ChatCompletion(ctx, t.GptModelVersion, prompt)
+		if err != nil {
+			return "", err
+		}
+	}
+	prefixParts := []string{}
+	if info != "" {
+		prefixParts = append(prefixParts, "Тип: "+info)
+	}
+	if category != "" {
+		prefixParts = append(prefixParts, "Категория: "+category)
+	}
+	prefix := strings.Join(prefixParts, "\n")
+	if prefix != "" {
+		prefix += "\n\n"
+	}
+	return prefix + resp, nil
+}
+
+// GetNewsForCategory returns news for a specific category.
+func (s *UserService) GetNewsForCategory(ctx context.Context, u *model.UserSettings, category string) (string, error) {
+	info := ""
+	if infos, ok := u.Topics[category]; ok && len(infos) > 0 {
+		info = infos[rand.Intn(len(infos))]
 	}
 	t, ok := s.tariffs[u.Tariff]
 	if !ok {

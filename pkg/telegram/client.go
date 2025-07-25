@@ -53,7 +53,7 @@ func (c *Client) url(method string) string {
 	return c.baseURL + "/bot" + c.token + "/" + method
 }
 
-func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, keyboard [][]string) error {
+func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, keyboard [][]string) (int, error) {
 	body := map[string]any{
 		"chat_id": chatID,
 		"text":    text,
@@ -67,22 +67,32 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, key
 	}
 	b, err := json.Marshal(body)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url("sendMessage"), bytes.NewReader(b))
 	if err != nil {
-		return err
+		return 0, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return errors.New("telegram: unexpected status " + resp.Status)
+		return 0, errors.New("telegram: unexpected status " + resp.Status)
 	}
-	return nil
+	var out struct {
+		OK     bool    `json:"ok"`
+		Result Message `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return 0, err
+	}
+	if !out.OK {
+		return 0, errors.New("telegram: api responded with not ok")
+	}
+	return out.Result.MessageID, nil
 }
 
 func (c *Client) GetUpdates(ctx context.Context, offset int) ([]Update, error) {
@@ -125,6 +135,31 @@ func (c *Client) SetCommands(ctx context.Context, commands []BotCommand) error {
 		return err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url("setMyCommands"), bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return errors.New("telegram: unexpected status " + resp.Status)
+	}
+	return nil
+}
+
+func (c *Client) DeleteMessage(ctx context.Context, chatID int64, messageID int) error {
+	body := map[string]any{
+		"chat_id":    chatID,
+		"message_id": messageID,
+	}
+	b, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url("deleteMessage"), bytes.NewReader(b))
 	if err != nil {
 		return err
 	}

@@ -52,24 +52,27 @@ func (r *PostgresUserSettingsRepository) init() error {
 func (r *PostgresUserSettingsRepository) Get(ctx context.Context, userID int64) (*model.UserSettings, error) {
 	row := r.db.QueryRowContext(ctx, `SELECT user_id, username, active, info_types, categories, frequency, tariff, last_scheduled_sent, last_get_news_now, get_news_now_count FROM user_settings WHERE user_id=$1`, userID)
 	var s model.UserSettings
-	var infoTypes, categories []byte
-	if err := row.Scan(&s.UserID, &s.UserName, &s.Active, &infoTypes, &categories, &s.Frequency, &s.Tariff, &s.LastScheduledSent, &s.LastGetNewsNow, &s.GetNewsNowCount); err != nil {
+	var topics, categories []byte
+	if err := row.Scan(&s.UserID, &s.UserName, &s.Active, &topics, &categories, &s.Frequency, &s.Tariff, &s.LastScheduledSent, &s.LastGetNewsNow, &s.GetNewsNowCount); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, errors.New("not found")
 		}
 		return nil, err
 	}
-	json.Unmarshal(infoTypes, &s.InfoTypes)
-	json.Unmarshal(categories, &s.Categories)
+	json.Unmarshal(topics, &s.Topics)
 	return &s, nil
 }
 
 func (r *PostgresUserSettingsRepository) Save(ctx context.Context, settings *model.UserSettings) error {
-	infoTypes, err := json.Marshal(settings.InfoTypes)
+	topics, err := json.Marshal(settings.Topics)
 	if err != nil {
 		return err
 	}
-	categories, err := json.Marshal(settings.Categories)
+	cats := []string{}
+	for c := range settings.Topics {
+		cats = append(cats, c)
+	}
+	categories, err := json.Marshal(cats)
 	if err != nil {
 		return err
 	}
@@ -86,7 +89,7 @@ func (r *PostgresUserSettingsRepository) Save(ctx context.Context, settings *mod
             last_scheduled_sent=EXCLUDED.last_scheduled_sent,
             last_get_news_now=EXCLUDED.last_get_news_now,
             get_news_now_count=EXCLUDED.get_news_now_count
-    `, settings.UserID, settings.UserName, settings.Active, string(infoTypes), string(categories), settings.Frequency, settings.Tariff, settings.LastScheduledSent, settings.LastGetNewsNow, settings.GetNewsNowCount)
+   `, settings.UserID, settings.UserName, settings.Active, string(topics), string(categories), settings.Frequency, settings.Tariff, settings.LastScheduledSent, settings.LastGetNewsNow, settings.GetNewsNowCount)
 	return err
 }
 
@@ -104,12 +107,11 @@ func (r *PostgresUserSettingsRepository) List(ctx context.Context) ([]*model.Use
 	var result []*model.UserSettings
 	for rows.Next() {
 		var s model.UserSettings
-		var infoTypes, categories []byte
-		if err := rows.Scan(&s.UserID, &s.UserName, &s.Active, &infoTypes, &categories, &s.Frequency, &s.Tariff, &s.LastScheduledSent, &s.LastGetNewsNow, &s.GetNewsNowCount); err != nil {
+		var topics, categories []byte
+		if err := rows.Scan(&s.UserID, &s.UserName, &s.Active, &topics, &categories, &s.Frequency, &s.Tariff, &s.LastScheduledSent, &s.LastGetNewsNow, &s.GetNewsNowCount); err != nil {
 			return nil, err
 		}
-		json.Unmarshal(infoTypes, &s.InfoTypes)
-		json.Unmarshal(categories, &s.Categories)
+		json.Unmarshal(topics, &s.Topics)
 		result = append(result, &s)
 	}
 	return result, rows.Err()
