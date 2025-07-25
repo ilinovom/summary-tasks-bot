@@ -141,6 +141,29 @@ func (s *UserService) GetNewsForCategory(ctx context.Context, u *model.UserSetti
 	return prefix + resp, nil
 }
 
+// GetLast24hNewsForCategory returns news for a category from the last 24 hours.
+func (s *UserService) GetLast24hNewsForCategory(ctx context.Context, u *model.UserSettings, category string) (string, error) {
+	t, ok := s.tariffs[u.Tariff]
+	if !ok {
+		log.Fatal("tariff for user is not set", u.UserID)
+	}
+	prompt := "Выдай краткие новости за последние 24 часа по теме '" + category + "'. Стиль — " + t.Style + ", объём — " + t.Volume + "."
+	var resp string
+	var err error
+	if s.openai == nil {
+		resp = prompt
+	} else {
+		resp, err = s.openai.ChatCompletion(ctx, t.GptModelVersion, prompt)
+		if err != nil {
+			return "", err
+		}
+	}
+	if category != "" {
+		resp = "Категория: " + category + "\n\n" + resp
+	}
+	return resp, nil
+}
+
 // ActiveUsers returns all active users.
 func (s *UserService) ActiveUsers(ctx context.Context) ([]*model.UserSettings, error) {
 	all, err := s.repo.List(ctx)

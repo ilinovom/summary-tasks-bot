@@ -8,7 +8,8 @@
     "volume": "2-3 предложения",
     "gpt_model_version": "gpt-3.5-turbo",
     "category_num_limit": 5,
-    "info_type_num_limit": 5
+    "info_type_num_limit": 5,
+    "allow_custom_category": false
   },
   "plus": {
     "frequency_scheduled_msg_send_in_minutes": 90,
@@ -19,6 +20,31 @@
     "volume": "3-5 предложений",
     "gpt_model_version": "gpt-4o-mini",
     "category_num_limit": 5,
-    "info_type_num_limit": 5
+    "info_type_num_limit": 5,
+    "allow_custom_category": true
+  },
+  "premium": {
+    "frequency_scheduled_msg_send_in_minutes": 60,
+    "time_range_scheduled_msg_send_per_day": "05:00-19:30",
+    "number_get_news_now_messages_per_day": 20,
+    "prompt": "Ты — креативный исследователь, помогающий расширять кругозор. Дай пользователю 1 {тип} на тему {категория}, который будет коротким, необычным, запоминающимся и применимым в жизни или бизнесе. Стиль — {тон}, объём — {объём}.\n\nИзбегай банальности. Удиви, но не выдумывай. Приводи редкие наблюдения, интересные формулировки. Не пиши вступлений, только сам контент.",
+    "style": "вдохновляющий",
+    "volume": "3-5 предложений",
+    "gpt_model_version": "gpt-4o-mini",
+    "category_num_limit": 5,
+    "info_type_num_limit": 5,
+    "allow_custom_category": true
+  },
+  "ultimate": {
+    "frequency_scheduled_msg_send_in_minutes": 30,
+    "time_range_scheduled_msg_send_per_day": "05:00-19:30",
+    "number_get_news_now_messages_per_day": 40,
+    "prompt": "Ты — креативный исследователь, помогающий расширять кругозор. Дай пользователю 1 {тип} на тему {категория}, который будет коротким, необычным, запоминающимся и применимым в жизни или бизнесе. Стиль — {тон}, объём — {объём}.\n\nИзбегай банальности. Удиви, но не выдумывай. Приводи редкие наблюдения, интересные формулировки. Не пиши вступлений, только сам контент.",
+    "style": "вдохновляющий",
+    "volume": "5-7 предложений",
+    "gpt_model_version": "gpt-4o-mini",
+    "category_num_limit": 5,
+    "info_type_num_limit": 5,
+    "allow_custom_category": true
   }
 }

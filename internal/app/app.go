@@ -26,23 +26,26 @@ const (
 	stageUpdateChoice convStage = iota + 1
 	stageSelectExistingCategory
 	stageCategory
+	stageCustomCategory
 	stageInfoTypes
 	stageWelcome
 	stageGetNewsCategory
+	stageGetLast24hCategory
 )
 
 type conversationState struct {
-	Stage         convStage
-	Step          int
-	CurrentCat    string
-	OldCat        string
-	Topics        map[string][]string
-	UpdateTopics  bool
-	CategoryLimit int
-	InfoLimit     int
-	LastMsgID     int
-	AvailableCats []string
-	Settings      *model.UserSettings
+	Stage               convStage
+	Step                int
+	CurrentCat          string
+	OldCat              string
+	Topics              map[string][]string
+	UpdateTopics        bool
+	CategoryLimit       int
+	InfoLimit           int
+	LastMsgID           int
+	AvailableCats       []string
+	Settings            *model.UserSettings
+	AllowCustomCategory bool
 }
 
 func formatOptions(opts []string) string {
@@ -51,6 +54,16 @@ func formatOptions(opts []string) string {
 		lines[i] = fmt.Sprintf("%d. %s", i+1, o)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func addCustomOption(opts []string, allow bool) []string {
+	if !allow {
+		return opts
+	}
+	out := make([]string, len(opts)+1)
+	copy(out, opts)
+	out[len(opts)] = "Своя категория"
+	return out
 }
 
 func parseSelection(text string, opts []string, limit int) []string {
@@ -179,6 +192,8 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 		a.handleStopCommand(ctx, m)
 	case "/get_news_now":
 		a.handleGetNewsNowCommand(ctx, m)
+	case "/get_last_24h_news":
+		a.handleGetLast24hNewsCommand(ctx, m)
 	case "/my_topics":
 		a.handleMyTopicsCommand(ctx, m)
 	case "/update_topics":
@@ -257,6 +272,7 @@ func (a *App) setCommands(ctx context.Context) {
 		{Command: "start", Description: "Start interaction"},
 		{Command: "update_topics", Description: "Update your topics"},
 		{Command: "get_news_now", Description: "Get news immediately"},
+		{Command: "get_last_24h_news", Description: "News from last 24h"},
 		{Command: "my_topics", Description: "Show my topics"},
 		{Command: "stop", Description: "Stop receiving updates"},
 	}
@@ -280,8 +296,10 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		c.Step = 0
 		c.CategoryLimit = t.CategoryNumLimit
 		c.InfoLimit = t.InfoTypeNumLimit
-		prompt := fmt.Sprintf("Выберите категорию №1:\n%s\nВведите номер.", formatOptions(a.categoryOptions))
-		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.categoryOptions)))
+		c.AllowCustomCategory = t.AllowCustomCategory
+		opts := addCustomOption(a.categoryOptions, c.AllowCustomCategory)
+		prompt := fmt.Sprintf("Выберите категорию №1:\n%s\nВведите номер.", formatOptions(opts))
+		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(opts)))
 		c.LastMsgID = msgID
 
 	case stageUpdateChoice:
@@ -309,8 +327,9 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		c.Topics = map[string][]string{}
 		c.Step = 0
 		c.Stage = stageCategory
-		prompt := fmt.Sprintf("Выберите категорию №1:\n%s\nВведите номер.", formatOptions(a.categoryOptions))
-		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.categoryOptions)))
+		opts := addCustomOption(a.categoryOptions, c.AllowCustomCategory)
+		prompt := fmt.Sprintf("Выберите категорию №1:\n%s\nВведите номер.", formatOptions(opts))
+		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(opts)))
 		c.LastMsgID = msgID
 
 	case stageSelectExistingCategory:
@@ -324,20 +343,43 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		a.tgClient.DeleteMessage(ctx, m.Chat.ID, c.LastMsgID)
 		c.OldCat = cats[0]
 		c.Stage = stageCategory
-		prompt := fmt.Sprintf("Выберите новую категорию вместо '%s':\n%s\nВведите номер.", c.OldCat, formatOptions(a.categoryOptions))
-		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.categoryOptions)))
+		opts := addCustomOption(a.categoryOptions, c.AllowCustomCategory)
+		prompt := fmt.Sprintf("Выберите новую категорию вместо '%s':\n%s\nВведите номер.", c.OldCat, formatOptions(opts))
+		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(opts)))
 		c.LastMsgID = msgID
 
 	case stageCategory:
-		cats := parseSelection(m.Text, a.categoryOptions, 1)
+		opts := addCustomOption(a.categoryOptions, c.AllowCustomCategory)
+		cats := parseSelection(m.Text, opts, 1)
 		if len(cats) == 0 {
-			msg, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Выберите номер категории", numberKeyboard(len(a.categoryOptions)))
+			msg, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Выберите номер категории", numberKeyboard(len(opts)))
 			c.LastMsgID = msg
 			return
 		}
 		a.tgClient.DeleteMessage(ctx, m.Chat.ID, m.MessageID)
 		a.tgClient.DeleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+		if c.AllowCustomCategory && cats[0] == "Своя категория" {
+			c.Stage = stageCustomCategory
+			msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Введите свою категорию (2-3 слова)", nil)
+			c.LastMsgID = msgID
+			return
+		}
 		c.CurrentCat = cats[0]
+		c.Stage = stageInfoTypes
+		prompt := fmt.Sprintf("Выберите типы информации для категории '%s':\n%s\nВведите номера через запятую (не более %d).", c.CurrentCat, formatOptions(a.infoOptions), c.InfoLimit)
+		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.infoOptions)))
+		c.LastMsgID = msgID
+
+	case stageCustomCategory:
+		words := strings.Fields(m.Text)
+		if len(words) < 2 || len(words) > 3 {
+			msg, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Введите от 2 до 3 слов", nil)
+			c.LastMsgID = msg
+			return
+		}
+		a.tgClient.DeleteMessage(ctx, m.Chat.ID, m.MessageID)
+		a.tgClient.DeleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+		c.CurrentCat = strings.Join(words, " ")
 		c.Stage = stageInfoTypes
 		prompt := fmt.Sprintf("Выберите типы информации для категории '%s':\n%s\nВведите номера через запятую (не более %d).", c.CurrentCat, formatOptions(a.infoOptions), c.InfoLimit)
 		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.infoOptions)))
@@ -431,8 +473,9 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		}
 
 		c.Stage = stageCategory
-		prompt := fmt.Sprintf("Выберите категорию №%d:\n%s\nВведите номер.", c.Step+1, formatOptions(a.categoryOptions))
-		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.categoryOptions)))
+		opts := addCustomOption(a.categoryOptions, c.AllowCustomCategory)
+		prompt := fmt.Sprintf("Выберите категорию №%d:\n%s\nВведите номер.", c.Step+1, formatOptions(opts))
+		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(opts)))
 		c.LastMsgID = msgID
 	case stageGetNewsCategory:
 		cats := parseSelection(m.Text, c.AvailableCats, 1)
@@ -463,6 +506,24 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			log.Println("save settings:", err)
 		}
 		msg, err := a.userService.GetNewsForCategory(ctx, c.Settings, cats[0])
+		if err != nil {
+			log.Println("get news:", err)
+			delete(a.convs, m.Chat.ID)
+			return
+		}
+		_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
+		delete(a.convs, m.Chat.ID)
+
+	case stageGetLast24hCategory:
+		cats := parseSelection(m.Text, c.AvailableCats, 1)
+		if len(cats) == 0 {
+			msg, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Выберите номер категории", numberKeyboard(len(c.AvailableCats)))
+			c.LastMsgID = msg
+			return
+		}
+		a.tgClient.DeleteMessage(ctx, m.Chat.ID, m.MessageID)
+		a.tgClient.DeleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+		msg, err := a.userService.GetLast24hNewsForCategory(ctx, c.Settings, cats[0])
 		if err != nil {
 			log.Println("get news:", err)
 			delete(a.convs, m.Chat.ID)
@@ -557,6 +618,32 @@ func (a *App) handleGetNewsNowCommand(ctx context.Context, m *telegram.Message) 
 	conv.LastMsgID = msgID
 }
 
+func (a *App) handleGetLast24hNewsCommand(ctx context.Context, m *telegram.Message) {
+	log.Printf("user %d(@%s) called /get_last_24h_news", m.Chat.ID, m.Chat.Username)
+	settings, err := a.repo.Get(ctx, m.Chat.ID)
+	if err != nil {
+		a.tgClient.SendMessage(ctx, m.Chat.ID, "Use /start first", nil)
+		return
+	}
+	if settings.Tariff != "plus" && settings.Tariff != "premium" && settings.Tariff != "ultimate" {
+		a.tgClient.SendMessage(ctx, m.Chat.ID, "Команда доступна на тарифах Plus и выше", nil)
+		return
+	}
+	if len(settings.Topics) == 0 {
+		_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, "Нет выбранных тем. Используйте /update_topics", nil)
+		return
+	}
+	conv := &conversationState{Stage: stageGetLast24hCategory, Settings: settings}
+	conv.AvailableCats = make([]string, 0, len(settings.Topics))
+	for cat := range settings.Topics {
+		conv.AvailableCats = append(conv.AvailableCats, cat)
+	}
+	a.convs[m.Chat.ID] = conv
+	prompt := fmt.Sprintf("Для какой категории получить новости за 24 часа?\n%s\nВведите номер.", formatOptions(conv.AvailableCats))
+	msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(conv.AvailableCats)))
+	conv.LastMsgID = msgID
+}
+
 func (a *App) handleUpdateTopicsCommand(ctx context.Context, m *telegram.Message) {
 	log.Printf("user %d(@%s) called /update_topics", m.Chat.ID, m.Chat.Username)
 	tariff := a.cfg.Tariffs["base"]
@@ -566,7 +653,7 @@ func (a *App) handleUpdateTopicsCommand(ctx context.Context, m *telegram.Message
 			tariff = t
 		}
 	}
-	conv := &conversationState{UpdateTopics: true, CategoryLimit: tariff.CategoryNumLimit, InfoLimit: tariff.InfoTypeNumLimit}
+	conv := &conversationState{UpdateTopics: true, CategoryLimit: tariff.CategoryNumLimit, InfoLimit: tariff.InfoTypeNumLimit, AllowCustomCategory: tariff.AllowCustomCategory}
 	if err == nil && len(settings.Topics) > 0 {
 		conv.Stage = stageUpdateChoice
 		conv.Topics = make(map[string][]string, len(settings.Topics))
