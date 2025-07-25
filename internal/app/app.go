@@ -23,7 +23,9 @@ import (
 type convStage int
 
 const (
-	stageCategory convStage = iota + 1
+	stageUpdateChoice convStage = iota + 1
+	stageSelectExistingCategory
+	stageCategory
 	stageInfoTypes
 )
 
@@ -36,6 +38,7 @@ type conversationState struct {
 	CategoryLimit int
 	InfoLimit     int
 	LastMsgID     int
+	AvailableCats []string
 }
 
 func formatOptions(opts []string) string {
@@ -260,6 +263,50 @@ func (a *App) setCommands(ctx context.Context) {
 
 func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *conversationState) {
 	switch c.Stage {
+	case stageUpdateChoice:
+		choice := parseSelection(m.Text, []string{"Обновить все", "Обновить одну"}, 1)
+		if len(choice) == 0 {
+			msg, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Выберите действие", [][]string{{"1", "2"}})
+			c.LastMsgID = msg
+			return
+		}
+		a.tgClient.DeleteMessage(ctx, m.Chat.ID, m.MessageID)
+		a.tgClient.DeleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+		if choice[0] == "Обновить одну" {
+			c.CategoryLimit = 1
+			c.AvailableCats = make([]string, 0, len(c.Topics))
+			for cat := range c.Topics {
+				c.AvailableCats = append(c.AvailableCats, cat)
+			}
+			c.Stage = stageSelectExistingCategory
+			prompt := fmt.Sprintf("Какую категорию обновить?\n%s\nВведите номер.", formatOptions(c.AvailableCats))
+			msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(c.AvailableCats)))
+			c.LastMsgID = msgID
+			return
+		}
+
+		c.Topics = map[string][]string{}
+		c.Step = 0
+		c.Stage = stageCategory
+		prompt := fmt.Sprintf("Выберите категорию №1:\n%s\nВведите номер.", formatOptions(a.categoryOptions))
+		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.categoryOptions)))
+		c.LastMsgID = msgID
+
+	case stageSelectExistingCategory:
+		cats := parseSelection(m.Text, c.AvailableCats, 1)
+		if len(cats) == 0 {
+			msg, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Выберите номер категории", numberKeyboard(len(c.AvailableCats)))
+			c.LastMsgID = msg
+			return
+		}
+		a.tgClient.DeleteMessage(ctx, m.Chat.ID, m.MessageID)
+		a.tgClient.DeleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+		c.CurrentCat = cats[0]
+		c.Stage = stageInfoTypes
+		prompt := fmt.Sprintf("Выберите типы информации для категории '%s':\n%s\nВведите номера через запятую (не более %d).", c.CurrentCat, formatOptions(a.infoOptions), c.InfoLimit)
+		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.infoOptions)))
+		c.LastMsgID = msgID
+
 	case stageCategory:
 		cats := parseSelection(m.Text, a.categoryOptions, 1)
 		if len(cats) == 0 {
@@ -454,12 +501,22 @@ func (a *App) handleGetNewsNowCommand(ctx context.Context, m *telegram.Message) 
 func (a *App) handleUpdateTopicsCommand(ctx context.Context, m *telegram.Message) {
 	log.Printf("user %d(@%s) called /update_topics", m.Chat.ID, m.Chat.Username)
 	tariff := a.cfg.Tariffs["base"]
-	if s, err := a.repo.Get(ctx, m.Chat.ID); err == nil {
-		if t, ok := a.cfg.Tariffs[s.Tariff]; ok {
+	settings, err := a.repo.Get(ctx, m.Chat.ID)
+	if err == nil {
+		if t, ok := a.cfg.Tariffs[settings.Tariff]; ok {
 			tariff = t
 		}
 	}
-	conv := &conversationState{Stage: stageCategory, UpdateTopics: true, CategoryLimit: tariff.CategoryNumLimit, InfoLimit: tariff.InfoTypeNumLimit}
+	conv := &conversationState{UpdateTopics: true, CategoryLimit: tariff.CategoryNumLimit, InfoLimit: tariff.InfoTypeNumLimit}
+	if err == nil && len(settings.Topics) > 0 {
+		conv.Stage = stageUpdateChoice
+		conv.Topics = settings.Topics
+		a.convs[m.Chat.ID] = conv
+		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Что будем обновлять?\n1. Обновить все\n2. Обновить одну", [][]string{{"1", "2"}})
+		conv.LastMsgID = msgID
+		return
+	}
+	conv.Stage = stageCategory
 	a.convs[m.Chat.ID] = conv
 	prompt := fmt.Sprintf("Выберите категорию №1:\n%s\nВведите номер.", formatOptions(a.categoryOptions))
 	msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.categoryOptions)))
