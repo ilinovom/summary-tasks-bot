@@ -23,6 +23,7 @@ type Tariff struct {
 	CategoryNumLimit                   int    `json:"category_num_limit"`
 	InfoTypeNumLimit                   int    `json:"info_type_num_limit"`
 	AllowCustomCategory                bool   `json:"allow_custom_category"`
+	PromptLast24h                      string `json:"prompt_last_24h"`
 }
 
 type Config struct {

@@ -9,7 +9,8 @@
     "gpt_model_version": "gpt-3.5-turbo",
     "category_num_limit": 5,
     "info_type_num_limit": 5,
-    "allow_custom_category": false
+    "allow_custom_category": false,
+    "prompt_last_24h": "Ты — оперативный журналист, собирающий свежие новости. Подведи главные события за последние 24 часа по теме {категория}. Стиль — {тон}, объём — {объём}. Без вступлений, только факты."
   },
   "plus": {
     "frequency_scheduled_msg_send_in_minutes": 90,
@@ -21,7 +22,8 @@
     "gpt_model_version": "gpt-4o-mini",
     "category_num_limit": 5,
     "info_type_num_limit": 5,
-    "allow_custom_category": true
+    "allow_custom_category": true,
+    "prompt_last_24h": "Ты — оперативный журналист, собирающий свежие новости. Подведи главные события за последние 24 часа по теме {категория}. Стиль — {тон}, объём — {объём}. Без вступлений, только факты."
   },
   "premium": {
     "frequency_scheduled_msg_send_in_minutes": 60,
@@ -33,7 +35,8 @@
     "gpt_model_version": "gpt-4o-mini",
     "category_num_limit": 5,
     "info_type_num_limit": 5,
-    "allow_custom_category": true
+    "allow_custom_category": true,
+    "prompt_last_24h": "Ты — оперативный журналист, собирающий свежие новости. Подведи главные события за последние 24 часа по теме {категория}. Стиль — {тон}, объём — {объём}. Без вступлений, только факты."
   },
   "ultimate": {
     "frequency_scheduled_msg_send_in_minutes": 30,
@@ -45,6 +48,7 @@
     "gpt_model_version": "gpt-4o-mini",
     "category_num_limit": 5,
     "info_type_num_limit": 5,
-    "allow_custom_category": true
+    "allow_custom_category": true,
+    "prompt_last_24h": "Ты — оперативный журналист, собирающий свежие новости. Подведи главные события за последние 24 часа по теме {категория}. Стиль — {тон}, объём — {объём}. Без вступлений, только факты."
   }
 }

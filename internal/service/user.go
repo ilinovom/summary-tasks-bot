@@ -147,7 +147,10 @@ func (s *UserService) GetLast24hNewsForCategory(ctx context.Context, u *model.Us
 	if !ok {
 		log.Fatal("tariff for user is not set", u.UserID)
 	}
-	prompt := "Выдай краткие новости за последние 24 часа по теме '" + category + "'. Стиль — " + t.Style + ", объём — " + t.Volume + "."
+	prompt := t.PromptLast24h
+	prompt = strings.ReplaceAll(prompt, "{категория}", category)
+	prompt = strings.ReplaceAll(prompt, "{тон}", t.Style)
+	prompt = strings.ReplaceAll(prompt, "{объём}", t.Volume)
 	var resp string
 	var err error
 	if s.openai == nil {
