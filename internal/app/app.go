@@ -27,6 +27,7 @@ const (
 	stageSelectExistingCategory
 	stageCategory
 	stageInfoTypes
+	stageWelcome
 )
 
 type conversationState struct {
@@ -264,6 +265,23 @@ func (a *App) setCommands(ctx context.Context) {
 
 func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *conversationState) {
 	switch c.Stage {
+	case stageWelcome:
+		if strings.TrimSpace(m.Text) != "Продолжить" {
+			msg, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Нажмите 'Продолжить'", [][]string{{"Продолжить"}})
+			c.LastMsgID = msg
+			return
+		}
+		a.tgClient.DeleteMessage(ctx, m.Chat.ID, m.MessageID)
+		a.tgClient.DeleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+		t := a.cfg.Tariffs["base"]
+		c.Stage = stageCategory
+		c.Step = 0
+		c.CategoryLimit = t.CategoryNumLimit
+		c.InfoLimit = t.InfoTypeNumLimit
+		prompt := fmt.Sprintf("Выберите категорию №1:\n%s\nВведите номер.", formatOptions(a.categoryOptions))
+		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.categoryOptions)))
+		c.LastMsgID = msgID
+
 	case stageUpdateChoice:
 		choice := parseSelection(m.Text, []string{"Обновить все", "Обновить одну"}, 1)
 		if len(choice) == 0 {
@@ -438,16 +456,12 @@ const startMsg = `Привет! Я бот для расширения круго
 func (a *App) handleStartCommand(ctx context.Context, m *telegram.Message) {
 	log.Printf("user %d (@%s) called /start", m.Chat.ID, m.Chat.Username)
 	if _, err := a.repo.Get(ctx, m.Chat.ID); err != nil {
-		_, err := a.tgClient.SendMessage(ctx, m.Chat.ID, startMsg, nil)
+		conv := &conversationState{Stage: stageWelcome}
+		a.convs[m.Chat.ID] = conv
+		msgID, err := a.tgClient.SendMessage(ctx, m.Chat.ID, startMsg, [][]string{{"Продолжить"}})
 		if err != nil {
 			log.Printf("error when sending message to chat id %v: %v", m.Chat.ID, err)
 		}
-		time.Sleep(time.Second * 5)
-		t := a.cfg.Tariffs["base"]
-		conv := &conversationState{Stage: stageCategory, CategoryLimit: t.CategoryNumLimit, InfoLimit: t.InfoTypeNumLimit}
-		a.convs[m.Chat.ID] = conv
-		prompt := fmt.Sprintf("Выберите категорию №1:\n%s\nВведите номер.", formatOptions(a.categoryOptions))
-		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.categoryOptions)))
 		conv.LastMsgID = msgID
 		return
 	}
