@@ -16,6 +16,7 @@ import (
 // AIClient describes the part of the OpenAI client used by the service.
 type AIClient interface {
 	ChatCompletion(ctx context.Context, model, prompt string) (string, error)
+	ChatResponses(ctx context.Context, model, prompt string) (string, error)
 }
 
 type UserService struct {
@@ -139,6 +140,32 @@ func (s *UserService) GetNewsForCategory(ctx context.Context, u *model.UserSetti
 		prefix += "\n\n"
 	}
 	return prefix + resp, nil
+}
+
+// GetLast24hNewsForCategory returns news for a category from the last 24 hours.
+func (s *UserService) GetLast24hNewsForCategory(ctx context.Context, u *model.UserSettings, category string) (string, error) {
+	t, ok := s.tariffs[u.Tariff]
+	if !ok {
+		log.Fatal("tariff for user is not set", u.UserID)
+	}
+	prompt := t.PromptLast24h
+	prompt = strings.ReplaceAll(prompt, "{категория}", category)
+	prompt = strings.ReplaceAll(prompt, "{тон}", t.Style)
+	prompt = strings.ReplaceAll(prompt, "{объём}", t.Volume)
+	var resp string
+	var err error
+	if s.openai == nil {
+		resp = prompt
+	} else {
+		resp, err = s.openai.ChatResponses(ctx, t.GptModelVersion, prompt)
+		if err != nil {
+			return "", err
+		}
+	}
+	if category != "" {
+		resp = "Категория: " + category + "\n\n" + resp
+	}
+	return resp, nil
 }
 
 // ActiveUsers returns all active users.

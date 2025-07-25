@@ -55,8 +55,9 @@ func (c *Client) url(method string) string {
 
 func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, keyboard [][]string) (int, error) {
 	body := map[string]any{
-		"chat_id": chatID,
-		"text":    text,
+		"chat_id":    chatID,
+		"text":       text,
+		"parse_mode": "HTML",
 	}
 	if keyboard != nil {
 		body["reply_markup"] = map[string]any{
