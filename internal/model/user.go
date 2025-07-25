@@ -3,6 +3,7 @@ package model
 // UserSettings stores preferences for a Telegram user.
 type UserSettings struct {
 	UserID            int64    `json:"user_id"`
+	UserName          string   `json:"user_name"`
 	Active            bool     `json:"active"`
 	InfoTypes         []string `json:"info_types,omitempty"`
 	Categories        []string `json:"categories,omitempty"`

@@ -153,7 +153,7 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 			a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, nil)
 			return
 		}
-		if err := a.userService.Start(ctx, m.Chat.ID); err != nil {
+		if err := a.userService.Start(ctx, m.Chat.ID, m.User.Username); err != nil {
 			log.Println("start:", err)
 		} else {
 			const msg = `Привет! Я бот для расширения кругозора.
@@ -211,6 +211,7 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 		if err := a.repo.Save(ctx, settings); err != nil {
 			log.Println("save settings:", err)
 		}
+		log.Printf("calling GetNews for user %s event /get_news_now", settings.UserName)
 		msg, err := a.userService.GetNews(ctx, settings)
 		if err != nil {
 			log.Println("get_news_now:", err)
@@ -283,6 +284,7 @@ func (a *App) scheduleMessages(ctx context.Context) {
 				if now.Sub(last) < time.Duration(tariff.FrequencyScheduledMsgSendInMinutes)*time.Minute {
 					continue
 				}
+				log.Printf("calling GetNews for user %s event scheduled", u.UserName)
 				msg, err := a.userService.GetNews(ctx, u)
 				if err != nil {
 					log.Println("get news:", err)
@@ -328,7 +330,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 				return
 			}
 			if err != nil && errors.Is(err, os.ErrNotExist) {
-				settings = &model.UserSettings{UserID: m.Chat.ID}
+				settings = &model.UserSettings{UserID: m.Chat.ID, UserName: m.User.Username}
 			}
 			settings.InfoTypes = c.InfoTypes
 			settings.Categories = c.Categories
@@ -343,6 +345,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 
 		settings := &model.UserSettings{
 			UserID:            m.Chat.ID,
+			UserName:          m.User.Username,
 			InfoTypes:         c.InfoTypes,
 			Categories:        c.Categories,
 			Tariff:            "base",
@@ -355,6 +358,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			log.Println("save settings:", err)
 		} else {
 			a.tgClient.SendMessage(ctx, m.Chat.ID, "Настройки сохранены", nil)
+			log.Printf("calling GetNews for user %s event /start", settings.UserName)
 			msg, err := a.userService.GetNews(ctx, settings)
 			if err == nil {
 				a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
