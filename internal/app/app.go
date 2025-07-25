@@ -139,6 +139,7 @@ func (a *App) handleUpdates(ctx context.Context) {
 }
 
 func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
+	// if user text first time
 	if conv, ok := a.convs[m.Chat.ID]; ok && conv.Stage != 0 && m.Text != "/start" {
 		a.continueConversation(ctx, m, conv)
 		return
@@ -146,96 +147,19 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 
 	switch m.Text {
 	case "/start":
-		log.Printf("user %d(userName: %s) called /start", m.User.ID, m.User.Username)
-		if _, err := a.repo.Get(ctx, m.Chat.ID); err != nil {
-			a.convs[m.Chat.ID] = &conversationState{Stage: stageInfoTypes}
-			prompt := "Какую информацию вы хотели бы получать?\n" + formatOptions(a.infoOptions) + "\nВведите номера через запятую (не более 5)."
-			a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, nil)
-			return
-		}
-		if err := a.userService.Start(ctx, m.Chat.ID, m.User.Username); err != nil {
-			log.Println("start:", err)
-		} else {
-			const msg = `Привет! Я бот для расширения кругозора.
-Что я умею?
-	- по выбранной категории и типу информации присылать тебе сообщения, которые будут развивать твой кругозор.
-
-Как часто можно получать сообщения?
-1) На бесплатном тарифе можно:
-	- получать до 5 сообщений моментально (команда /get_news_now)
-	- получать сообщения каждые 3 часа в интервале с 08:00 до 23:00
-   * суммарно можно получить за день 8 сообщений
-2) Другие тарифы пока прорабатываются ...
-
-Какие у меня есть команды?
-	- /start для старта/возобновления отправки сообщений.
-	- /update_topics для обновления типов и категорий.
-	- /get_news_now, чтобы получить информацию прямо сейчас.
-	- /my_topics, чтобы получить установленные категории и типы информации.
-	- /stop, чтобы остановить отправку сообщений.`
-
-			err := a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
-			if err != nil {
-				log.Printf("error when sending message to chat id %v: %v", m.Chat.ID, err)
-			}
-		}
+		a.handleStartCommand(ctx, m)
 	case "/stop":
-		log.Printf("user %d(userName: %s) called /stop", m.User.ID, m.User.Username)
-		if err := a.userService.Stop(ctx, m.Chat.ID); err != nil {
-			log.Println("stop:", err)
-		} else {
-			a.tgClient.SendMessage(ctx, m.Chat.ID, "Stopped updates", nil)
-		}
+		a.handleStopCommand(ctx, m)
 	case "/get_news_now":
-		log.Printf("user %d(userName: %s) called /get_news_now", m.User.ID, m.User.Username)
-		settings, err := a.repo.Get(ctx, m.Chat.ID)
-		if err != nil {
-			a.tgClient.SendMessage(ctx, m.Chat.ID, "Use /start first", nil)
-			return
-		}
-		tariff, ok := a.cfg.Tariffs[settings.Tariff]
-		if !ok {
-			tariff = a.cfg.Tariffs["base"]
-		}
-		now := time.Now()
-		last := time.Unix(settings.LastGetNewsNow, 0)
-		if now.YearDay() != last.YearDay() || now.Year() != last.Year() {
-			settings.GetNewsNowCount = 0
-		}
-		if settings.GetNewsNowCount >= tariff.NumberGetNewsNowMessagesPerDay {
-			a.tgClient.SendMessage(ctx, m.Chat.ID, "Лимит исчерпан на сегодня", nil)
-			return
-		}
-		settings.GetNewsNowCount++
-		settings.LastGetNewsNow = now.Unix()
-		if err := a.repo.Save(ctx, settings); err != nil {
-			log.Println("save settings:", err)
-		}
-		log.Printf("calling GetNews for user %s event /get_news_now", settings.UserName)
-		msg, err := a.userService.GetNews(ctx, settings)
-		if err != nil {
-			log.Println("get_news_now:", err)
-			return
-		}
-		a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
+		a.handleGetNewsNowCommand(ctx, m)
 	case "/my_topics":
-		log.Printf("user %d(userName: %s) called /my_topics", m.User.ID, m.User.Username)
-		settings, err := a.repo.Get(ctx, m.Chat.ID)
-		if err != nil {
-			a.tgClient.SendMessage(ctx, m.Chat.ID, "Use /start first", nil)
-			return
-		}
-		info := strings.Join(settings.InfoTypes, ", ")
-		cats := strings.Join(settings.Categories, ", ")
-		msg := fmt.Sprintf("Ваши типы: %s\nВаши категории: %s", info, cats)
-		a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
+		a.handleMyTopicsCommand(ctx, m)
 	case "/update_topics":
-		log.Printf("user %d(userName: %s) called /update_topics", m.User.ID, m.User.Username)
-		a.convs[m.Chat.ID] = &conversationState{Stage: stageInfoTypes, UpdateTopics: true}
-		prompt := "Какую информацию вы хотели бы получать?\n" + formatOptions(a.infoOptions) + "\nВведите номера через запятую (не более 5)."
-		a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, nil)
+		a.handleUpdateTopicsCommand(ctx, m)
 	default:
-		// ignore other messages
+		log.Printf("user %d(@%s) texted: %s", m.Chat.ID, m.Chat.Username, m.Text)
+		promt := "Я не понимаю текст вне команд. Чтобы увидеть команды, нажми кнопку `Меню` или вызови команду  `/start`"
+		a.tgClient.SendMessage(ctx, m.Chat.ID, promt, nil)
 	}
 }
 
@@ -284,13 +208,14 @@ func (a *App) scheduleMessages(ctx context.Context) {
 				if now.Sub(last) < time.Duration(tariff.FrequencyScheduledMsgSendInMinutes)*time.Minute {
 					continue
 				}
-				log.Printf("calling GetNews for user %s event scheduled", u.UserName)
 				msg, err := a.userService.GetNews(ctx, u)
 				if err != nil {
 					log.Println("get news:", err)
 					continue
 				}
 				a.tgClient.SendMessage(ctx, u.UserID, msg, nil)
+				log.Printf("user %d(@%s) got scheduled news", u.UserID, u.UserName)
+
 				u.LastScheduledSent = now.Unix()
 				if err := a.repo.Save(ctx, u); err != nil {
 					log.Println("save settings:", err)
@@ -330,7 +255,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 				return
 			}
 			if err != nil && errors.Is(err, os.ErrNotExist) {
-				settings = &model.UserSettings{UserID: m.Chat.ID, UserName: m.User.Username}
+				settings = &model.UserSettings{UserID: m.Chat.ID, UserName: m.Chat.Username}
 			}
 			settings.InfoTypes = c.InfoTypes
 			settings.Categories = c.Categories
@@ -345,7 +270,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 
 		settings := &model.UserSettings{
 			UserID:            m.Chat.ID,
-			UserName:          m.User.Username,
+			UserName:          m.Chat.Username,
 			InfoTypes:         c.InfoTypes,
 			Categories:        c.Categories,
 			Tariff:            "base",
@@ -358,7 +283,6 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			log.Println("save settings:", err)
 		} else {
 			a.tgClient.SendMessage(ctx, m.Chat.ID, "Настройки сохранены", nil)
-			log.Printf("calling GetNews for user %s event /start", settings.UserName)
 			msg, err := a.userService.GetNews(ctx, settings)
 			if err == nil {
 				a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
@@ -368,4 +292,107 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		}
 		delete(a.convs, m.Chat.ID)
 	}
+}
+
+const startMsg = `Привет! Я бот для расширения кругозора.
+Что я умею?
+	- по выбранной категории и типу информации присылать тебе сообщения, которые будут развивать твой кругозор.
+
+Как часто можно получать сообщения?
+1) На бесплатном тарифе можно:
+	- получать до 5 сообщений моментально (команда /get_news_now)
+	- получать сообщения каждые 3 часа в интервале с 08:00 до 23:00
+   * суммарно можно получить за день 8 сообщений
+2) Другие тарифы пока прорабатываются ...
+
+Какие у меня есть команды?
+	- /start для старта/возобновления отправки сообщений.
+	- /update_topics для обновления типов и категорий.
+	- /get_news_now, чтобы получить информацию прямо сейчас.
+	- /my_topics, чтобы получить установленные категории и типы информации.
+	- /stop, чтобы остановить отправку сообщений.`
+
+func (a *App) handleStartCommand(ctx context.Context, m *telegram.Message) {
+	log.Printf("user %d (@%s) called /start", m.Chat.ID, m.Chat.Username)
+	if _, err := a.repo.Get(ctx, m.Chat.ID); err != nil {
+		err := a.tgClient.SendMessage(ctx, m.Chat.ID, startMsg, nil)
+		if err != nil {
+			log.Printf("error when sending message to chat id %v: %v", m.Chat.ID, err)
+		}
+		time.Sleep(time.Second * 5)
+		a.convs[m.Chat.ID] = &conversationState{Stage: stageInfoTypes}
+		prompt := "Какую информацию вы хотели бы получать?\n" + formatOptions(a.infoOptions) + "\nВведите номера через запятую (не более 5)."
+		a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, nil)
+		return
+	}
+	if err := a.userService.Start(ctx, m.Chat.ID, m.Chat.Username); err != nil {
+		log.Println("start:", err)
+	} else {
+		err := a.tgClient.SendMessage(ctx, m.Chat.ID, startMsg, nil)
+		if err != nil {
+			log.Printf("error when sending message to chat id %v: %v", m.Chat.ID, err)
+		}
+	}
+}
+
+func (a *App) handleStopCommand(ctx context.Context, m *telegram.Message) {
+	log.Printf("user %d(@%s) called /stop", m.Chat.ID, m.Chat.Username)
+	if err := a.userService.Stop(ctx, m.Chat.ID); err != nil {
+		log.Println("stop:", err)
+	} else {
+		a.tgClient.SendMessage(ctx, m.Chat.ID, "Stopped updates", nil)
+	}
+}
+
+func (a *App) handleGetNewsNowCommand(ctx context.Context, m *telegram.Message) {
+	log.Printf("user %d(@%s) called /get_news_now", m.Chat.ID, m.Chat.Username)
+	settings, err := a.repo.Get(ctx, m.Chat.ID)
+	if err != nil {
+		a.tgClient.SendMessage(ctx, m.Chat.ID, "Use /start first", nil)
+		return
+	}
+	tariff, ok := a.cfg.Tariffs[settings.Tariff]
+	if !ok {
+		tariff = a.cfg.Tariffs["base"]
+	}
+	now := time.Now()
+	last := time.Unix(settings.LastGetNewsNow, 0)
+	if now.YearDay() != last.YearDay() || now.Year() != last.Year() {
+		settings.GetNewsNowCount = 0
+	}
+	if settings.GetNewsNowCount >= tariff.NumberGetNewsNowMessagesPerDay {
+		a.tgClient.SendMessage(ctx, m.Chat.ID, "Лимит исчерпан на сегодня", nil)
+		return
+	}
+	settings.GetNewsNowCount++
+	settings.LastGetNewsNow = now.Unix()
+	if err := a.repo.Save(ctx, settings); err != nil {
+		log.Println("save settings:", err)
+	}
+	msg, err := a.userService.GetNews(ctx, settings)
+	if err != nil {
+		log.Println("get_news_now:", err)
+		return
+	}
+	a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
+}
+
+func (a *App) handleUpdateTopicsCommand(ctx context.Context, m *telegram.Message) {
+	log.Printf("user %d(@%s) called /update_topics", m.Chat.ID, m.Chat.Username)
+	a.convs[m.Chat.ID] = &conversationState{Stage: stageInfoTypes, UpdateTopics: true}
+	prompt := "Какую информацию вы хотели бы получать?\n" + formatOptions(a.infoOptions) + "\nВведите номера через запятую (не более 5)."
+	a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, nil)
+}
+
+func (a *App) handleMyTopicsCommand(ctx context.Context, m *telegram.Message) {
+	log.Printf("user %d(@%s) called /my_topics", m.Chat.ID, m.Chat.Username)
+	settings, err := a.repo.Get(ctx, m.Chat.ID)
+	if err != nil {
+		a.tgClient.SendMessage(ctx, m.Chat.ID, "Use /start first", nil)
+		return
+	}
+	info := strings.Join(settings.InfoTypes, ", ")
+	cats := strings.Join(settings.Categories, ", ")
+	msg := fmt.Sprintf("Ваши типы: %s\nВаши категории: %s", info, cats)
+	a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
 }

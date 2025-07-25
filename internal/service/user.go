@@ -78,7 +78,6 @@ func (s *UserService) GetNews(ctx context.Context, u *model.UserSettings) (strin
 	if s.openai == nil {
 		resp = prompt
 	} else {
-		log.Println("calling OpenAI")
 		resp, err = s.openai.ChatCompletion(ctx, t.GptModelVersion, prompt)
 		if err != nil {
 			return "", err
