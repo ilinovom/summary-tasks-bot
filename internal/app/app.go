@@ -28,6 +28,7 @@ const (
 	stageCategory
 	stageInfoTypes
 	stageWelcome
+	stageGetNewsCategory
 )
 
 type conversationState struct {
@@ -41,6 +42,7 @@ type conversationState struct {
 	InfoLimit     int
 	LastMsgID     int
 	AvailableCats []string
+	Settings      *model.UserSettings
 }
 
 func formatOptions(opts []string) string {
@@ -432,6 +434,42 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		prompt := fmt.Sprintf("Выберите категорию №%d:\n%s\nВведите номер.", c.Step+1, formatOptions(a.categoryOptions))
 		msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.categoryOptions)))
 		c.LastMsgID = msgID
+	case stageGetNewsCategory:
+		cats := parseSelection(m.Text, c.AvailableCats, 1)
+		if len(cats) == 0 {
+			msg, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, "Выберите номер категории", numberKeyboard(len(c.AvailableCats)))
+			c.LastMsgID = msg
+			return
+		}
+		a.tgClient.DeleteMessage(ctx, m.Chat.ID, m.MessageID)
+		a.tgClient.DeleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+		tariff, ok := a.cfg.Tariffs[c.Settings.Tariff]
+		if !ok {
+			tariff = a.cfg.Tariffs["base"]
+		}
+		now := time.Now()
+		last := time.Unix(c.Settings.LastGetNewsNow, 0)
+		if now.YearDay() != last.YearDay() || now.Year() != last.Year() {
+			c.Settings.GetNewsNowCount = 0
+		}
+		if c.Settings.GetNewsNowCount >= tariff.NumberGetNewsNowMessagesPerDay {
+			_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, "Лимит исчерпан на сегодня", nil)
+			delete(a.convs, m.Chat.ID)
+			return
+		}
+		c.Settings.GetNewsNowCount++
+		c.Settings.LastGetNewsNow = now.Unix()
+		if err := a.repo.Save(ctx, c.Settings); err != nil {
+			log.Println("save settings:", err)
+		}
+		msg, err := a.userService.GetNewsForCategory(ctx, c.Settings, cats[0])
+		if err != nil {
+			log.Println("get news:", err)
+			delete(a.convs, m.Chat.ID)
+			return
+		}
+		_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
+		delete(a.convs, m.Chat.ID)
 	}
 }
 
@@ -504,17 +542,19 @@ func (a *App) handleGetNewsNowCommand(ctx context.Context, m *telegram.Message) 
 		_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, "Лимит исчерпан на сегодня", nil)
 		return
 	}
-	settings.GetNewsNowCount++
-	settings.LastGetNewsNow = now.Unix()
-	if err := a.repo.Save(ctx, settings); err != nil {
-		log.Println("save settings:", err)
-	}
-	msg, err := a.userService.GetNews(ctx, settings)
-	if err != nil {
-		log.Println("get_news_now:", err)
+	if len(settings.Topics) == 0 {
+		_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, "Нет выбранных тем. Используйте /update_topics", nil)
 		return
 	}
-	_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, msg, nil)
+	conv := &conversationState{Stage: stageGetNewsCategory, Settings: settings}
+	conv.AvailableCats = make([]string, 0, len(settings.Topics))
+	for cat := range settings.Topics {
+		conv.AvailableCats = append(conv.AvailableCats, cat)
+	}
+	a.convs[m.Chat.ID] = conv
+	prompt := fmt.Sprintf("Для какой категории получить информацию?\n%s\nВведите номер.", formatOptions(conv.AvailableCats))
+	msgID, _ := a.tgClient.SendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(conv.AvailableCats)))
+	conv.LastMsgID = msgID
 }
 
 func (a *App) handleUpdateTopicsCommand(ctx context.Context, m *telegram.Message) {
