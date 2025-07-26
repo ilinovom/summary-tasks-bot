@@ -649,6 +649,7 @@ func (a *App) handleGetNewsNowCommand(ctx context.Context, m *telegram.Message) 
 	}
 	if settings.GetNewsNowCount >= tariff.NumberGetNewsNowMessagesPerDay {
 		a.sendMessage(ctx, m.Chat.ID, "Лимит исчерпан на сегодня", nil)
+
 		return
 	}
 	if len(settings.Topics) == 0 {

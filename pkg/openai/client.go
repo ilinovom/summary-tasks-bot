@@ -64,27 +64,6 @@ func (c *Client) ChatCompletion(ctx context.Context, model, prompt string) (stri
 		},
 	}
 
-	// Пример добавления функции поиска
-	reqBody["tools"] = []map[string]any{
-		{
-			"type": "function",
-			"function": map[string]any{
-				"name":        "web_search",
-				"description": "Search the web for information",
-				"parameters": map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"query": map[string]string{
-							"type":        "string",
-							"description": "Search query",
-						},
-					},
-					"required": []string{"query"},
-				},
-			},
-		},
-	}
-
 	var respBody struct {
 		Choices []struct {
 			Message struct {
@@ -109,9 +88,28 @@ func (c *Client) ChatResponses(ctx context.Context, model, prompt string) (strin
 		"input": []map[string]string{{"role": "user", "content": prompt}},
 	}
 
-	if true {
-		reqBody["tools"] = []map[string]string{{"type": "web_search_preview"}}
-	}
+	//// Пример добавления функции поиска
+	//reqBody["tools"] = []map[string]any{
+	//	{
+	//		"type": "function",
+	//		"function": map[string]any{
+	//			"name":        "web_search",
+	//			"description": "Search the web for information",
+	//			"parameters": map[string]any{
+	//				"type": "object",
+	//				"properties": map[string]any{
+	//					"query": map[string]string{
+	//						"type":        "string",
+	//						"description": "Search query",
+	//					},
+	//				},
+	//				"required": []string{"query"},
+	//			},
+	//		},
+	//	},
+	//}
+
+	reqBody["tools"] = []map[string]string{{"type": "web_search_preview"}}
 
 	var respBody struct {
 		Output []struct {
