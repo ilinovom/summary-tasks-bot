@@ -132,6 +132,23 @@ func (a *App) sendMessage(ctx context.Context, chatID int64, text string, kb [][
 	return msgID, err
 }
 
+func (a *App) sendLongMessage(ctx context.Context, chatID int64, text string) error {
+	const limit = 4096
+	runes := []rune(text)
+	for len(runes) > 0 {
+		n := limit
+		if n > len(runes) {
+			n = len(runes)
+		}
+		part := string(runes[:n])
+		if _, err := a.sendMessage(ctx, chatID, part, nil); err != nil {
+			return err
+		}
+		runes = runes[n:]
+	}
+	return nil
+}
+
 func (a *App) deleteMessage(ctx context.Context, chatID int64, messageID int) {
 	if err := a.tgClient.DeleteMessage(ctx, chatID, messageID); err != nil {
 		log.Printf("telegram delete message: %v", err)
@@ -550,10 +567,15 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		}
 
 		a.deleteMessage(ctx, m.Chat.ID, msgWait)
-
-		_, err = a.sendMessage(ctx, m.Chat.ID, msg, nil)
-		if err != nil {
-			log.Println("send msg err: ", err)
+		if len([]rune(msg)) > 4096 {
+			if err := a.sendLongMessage(ctx, m.Chat.ID, msg); err != nil {
+				log.Println("send msg err: ", err)
+			}
+		} else {
+			_, err = a.sendMessage(ctx, m.Chat.ID, msg, nil)
+			if err != nil {
+				log.Println("send msg err: ", err)
+			}
 		}
 		delete(a.convs, m.Chat.ID)
 	}
