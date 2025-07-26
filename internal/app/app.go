@@ -297,7 +297,11 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 		a.handleUpdateTopicsCommand(ctx, m)
 	case "/add_topic":
 		a.handleAddTopicCommand(ctx, m)
-	//case "/test":
+	case "/info":
+		a.handleInfoCommand(ctx, m)
+	case "/tariffs":
+		a.handleTariffsCommand(ctx, m)
+		//case "/test":
 	//	a.handleTestCmd(ctx, m)
 	default:
 		log.Printf("user %d(@%s) texted: %s", m.Chat.ID, m.Chat.Username, m.Text)
@@ -376,6 +380,8 @@ func (a *App) setCommands(ctx context.Context) {
 		{Command: "get_news_now", Description: "Get news immediately"},
 		{Command: "get_last_24h_news", Description: "News from last 24h"},
 		{Command: "my_topics", Description: "Show my topics"},
+		{Command: "info", Description: "Show bot commands"},
+		{Command: "tariffs", Description: "Tariff details"},
 		{Command: "stop", Description: "Stop receiving updates"},
 	}
 	if err := a.tgClient.SetCommands(ctx, cmds); err != nil {
@@ -875,4 +881,14 @@ func (a *App) handleMyTopicsCommand(ctx context.Context, m *telegram.Message) {
 	}
 	msg := fmt.Sprintf(a.messages["your_topics"], strings.Join(parts, "\n"))
 	a.sendMessage(ctx, m.Chat.ID, msg, nil)
+}
+
+func (a *App) handleInfoCommand(ctx context.Context, m *telegram.Message) {
+	log.Printf("user %d(@%s) called /info", m.Chat.ID, m.Chat.Username)
+	a.sendLongMessage(ctx, m.Chat.ID, a.messages["info"])
+}
+
+func (a *App) handleTariffsCommand(ctx context.Context, m *telegram.Message) {
+	log.Printf("user %d(@%s) called /tariffs", m.Chat.ID, m.Chat.Username)
+	a.sendLongMessage(ctx, m.Chat.ID, a.messages["tariffs"])
 }
