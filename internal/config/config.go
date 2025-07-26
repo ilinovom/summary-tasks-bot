@@ -12,18 +12,31 @@ type Options struct {
 	CategoryOptions []string `json:"category_options"`
 }
 
+type Schedule struct {
+	FrequencyMinutes int    `json:"frequency_minutes"`
+	TimeRange        string `json:"time_range"`
+}
+
+type Limits struct {
+	GetNewsNowPerDay int `json:"get_news_now_per_day"`
+	CategoryLimit    int `json:"category_limit"`
+	InfoTypeLimit    int `json:"info_type_limit"`
+}
+
+type GPTConfig struct {
+	Model         string `json:"model"`
+	PromptMain    string `json:"prompt_main"`
+	PromptLast24h string `json:"prompt_last_24h"`
+	MaxTokens     int    `json:"max_tokens"`
+	Style         string `json:"style"`
+	Volume        string `json:"volume"`
+}
+
 type Tariff struct {
-	FrequencyScheduledMsgSendInMinutes int    `json:"frequency_scheduled_msg_send_in_minutes"`
-	TimeRangeScheduledMsgSendPerDay    string `json:"time_range_scheduled_msg_send_per_day"`
-	NumberGetNewsNowMessagesPerDay     int    `json:"number_get_news_now_messages_per_day"`
-	Prompt                             string `json:"prompt"`
-	Style                              string `json:"style"`
-	Volume                             string `json:"volume"`
-	GptModelVersion                    string `json:"gpt_model_version"`
-	CategoryNumLimit                   int    `json:"category_num_limit"`
-	InfoTypeNumLimit                   int    `json:"info_type_num_limit"`
-	AllowCustomCategory                bool   `json:"allow_custom_category"`
-	PromptLast24h                      string `json:"prompt_last_24h"`
+	Schedule            Schedule  `json:"schedule"`
+	Limits              Limits    `json:"limits"`
+	GPT                 GPTConfig `json:"gpt"`
+	AllowCustomCategory bool      `json:"allow_custom_category"`
 }
 
 type Config struct {
@@ -36,9 +49,11 @@ type Config struct {
 	OptionsFile   string
 	PromptFile    string
 	TariffFile    string
+	MessagesFile  string
 
-	Options Options
-	Tariffs map[string]Tariff
+	Options  Options
+	Tariffs  map[string]Tariff
+	Messages map[string]string
 }
 
 // FromEnv loads configuration from environment variables. TELEGRAM_TOKEN is required.
@@ -55,6 +70,7 @@ func FromEnv() (*Config, error) {
 		SettingsPath:  os.Getenv("SETTINGS_FILE"),
 		OptionsFile:   os.Getenv("OPTIONS_FILE"),
 		TariffFile:    os.Getenv("TARIFF_FILE"),
+		MessagesFile:  os.Getenv("MESSAGES_FILE"),
 	}
 	if c.TelegramToken == "" {
 		return nil, errors.New("TELEGRAM_TOKEN is not set")
@@ -74,10 +90,16 @@ func FromEnv() (*Config, error) {
 	if c.TariffFile == "" {
 		c.TariffFile = "tariff.json"
 	}
+	if c.MessagesFile == "" {
+		c.MessagesFile = "messages.json"
+	}
 	if err := c.loadOptions(); err != nil {
 		return nil, err
 	}
 	if err := c.loadTariffs(); err != nil {
+		return nil, err
+	}
+	if err := c.loadMessages(); err != nil {
 		return nil, err
 	}
 	return c, nil
@@ -99,4 +121,13 @@ func (c *Config) loadTariffs() error {
 	}
 	defer file.Close()
 	return json.NewDecoder(file).Decode(&c.Tariffs)
+}
+
+func (c *Config) loadMessages() error {
+	file, err := os.Open(c.MessagesFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return json.NewDecoder(file).Decode(&c.Messages)
 }

@@ -55,13 +55,16 @@ func (c *Client) do(ctx context.Context, endpoint string, body any, out any) err
 }
 
 // ChatCompletion sends a minimal chat completion request using the configured model.
-func (c *Client) ChatCompletion(ctx context.Context, model, prompt string) (string, error) {
+func (c *Client) ChatCompletion(ctx context.Context, model, prompt string, maxTokens int) (string, error) {
 
 	reqBody := map[string]any{
 		"model": model,
 		"messages": []map[string]string{
 			{"role": "user", "content": prompt},
 		},
+	}
+	if maxTokens > 0 {
+		reqBody["max_tokens"] = maxTokens
 	}
 
 	var respBody struct {
@@ -81,11 +84,14 @@ func (c *Client) ChatCompletion(ctx context.Context, model, prompt string) (stri
 }
 
 // ChatResponses
-func (c *Client) ChatResponses(ctx context.Context, model, prompt string) (string, error) {
+func (c *Client) ChatResponses(ctx context.Context, model, prompt string, maxTokens int) (string, error) {
 
 	reqBody := map[string]any{
 		"model": model,
 		"input": []map[string]string{{"role": "user", "content": prompt}},
+	}
+	if maxTokens > 0 {
+		reqBody["max_output_tokens"] = maxTokens
 	}
 
 	//// Пример добавления функции поиска
