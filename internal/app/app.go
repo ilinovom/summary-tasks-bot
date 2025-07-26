@@ -434,6 +434,9 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			}
 			c.Stage = stageSelectManyExisting
 			prompt := fmt.Sprintf(a.messages["prompt_choose_existing_multi"], formatOptions(c.AvailableCats))
+			if len(c.SelectedCats) > 0 {
+				prompt += "\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedCats, ", "))
+			}
 			msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(c.AvailableCats)))
 			c.LastMsgID = msgID
 			return
@@ -543,14 +546,22 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 	case stageInfoTypes:
 		if strings.EqualFold(m.Text, "Готово") {
 			if len(c.SelectedInfos) == 0 && len(c.Topics[c.CurrentCat]) == 0 {
-				msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["enter_info_numbers"], numberKeyboardWithDone(len(a.infoOptions)))
+				prompt := fmt.Sprintf(a.messages["prompt_choose_info"], c.CurrentCat, c.InfoLimit, formatOptions(a.infoOptions))
+				if len(c.SelectedInfos) > 0 {
+					prompt += "\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedInfos, ", "))
+				}
+				msg, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(a.infoOptions)))
 				c.LastMsgID = msg
 				return
 			}
 		} else {
 			infos := parseSelection(m.Text, a.infoOptions, c.InfoLimit-len(c.SelectedInfos))
 			if len(infos) == 0 {
-				msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["enter_info_numbers"], numberKeyboardWithDone(len(a.infoOptions)))
+				prompt := fmt.Sprintf(a.messages["prompt_choose_info"], c.CurrentCat, c.InfoLimit, formatOptions(a.infoOptions))
+				if len(c.SelectedInfos) > 0 {
+					prompt += "\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedInfos, ", "))
+				}
+				msg, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(a.infoOptions)))
 				c.LastMsgID = msg
 				return
 			}
@@ -569,7 +580,11 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 				}
 			}
 			if len(c.SelectedInfos) < c.InfoLimit {
-				msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["enter_info_numbers"], numberKeyboardWithDone(len(a.infoOptions)))
+				prompt := fmt.Sprintf(a.messages["prompt_choose_info"], c.CurrentCat, c.InfoLimit, formatOptions(a.infoOptions))
+				if len(c.SelectedInfos) > 0 {
+					prompt += "\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedInfos, ", "))
+				}
+				msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(a.infoOptions)))
 				c.LastMsgID = msgID
 				return
 			}
