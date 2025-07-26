@@ -201,7 +201,10 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 	default:
 		log.Printf("user %d(@%s) texted: %s", m.Chat.ID, m.Chat.Username, m.Text)
 		promt := "Я не понимаю текст вне команд. Чтобы увидеть команды, нажми кнопку `Меню` или вызови команду  `/start`"
-		_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, promt, nil)
+		_, err := a.tgClient.SendMessage(ctx, m.Chat.ID, promt, nil)
+		if err != nil {
+			log.Println("error when sending msg in default case: ", err)
+		}
 	}
 }
 
@@ -635,7 +638,10 @@ func (a *App) handleGetNewsNowCommand(ctx context.Context, m *telegram.Message) 
 		settings.GetNewsNowCount = 0
 	}
 	if settings.GetNewsNowCount >= tariff.NumberGetNewsNowMessagesPerDay {
-		_, _ = a.tgClient.SendMessage(ctx, m.Chat.ID, "Лимит исчерпан на сегодня", nil)
+		_, err = a.tgClient.SendMessage(ctx, m.Chat.ID, "Лимит исчерпан на сегодня", nil)
+		if err != nil {
+			log.Println("error when sending msg: ", err)
+		}
 		return
 	}
 	if len(settings.Topics) == 0 {
