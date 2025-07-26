@@ -39,30 +39,16 @@ func (c *Client) do(ctx context.Context, endpoint string, body any, out any) err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
+
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
-	ba, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(ba, out)
-	if err != nil {
-		return err
-	}
-	return nil
-
-	fmt.Println(string(ba))
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return errors.New("openai: unexpected status " + resp.Status)
-	}
 
-	err = json.NewDecoder(resp.Body).Decode(out)
-	if err != nil {
-		return err
+	if resp.StatusCode != http.StatusOK {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("openai: unexpected status %s: %s", resp.Status, string(data))
 	}
 
 	return json.NewDecoder(resp.Body).Decode(out)
@@ -137,7 +123,7 @@ func (c *Client) ChatResponses(ctx context.Context, model, prompt string) (strin
 	if err := c.do(ctx, "/responses", reqBody, &respBody); err != nil {
 		return "", err
 	}
-	if len(respBody.Output) == 0 {
+	if len(respBody.Output) < 2 || len(respBody.Output[1].Content) == 0 {
 		return "", errors.New("openai: empty response")
 	}
 
