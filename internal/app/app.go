@@ -32,6 +32,8 @@ const (
 	stageGetLast24hCategory
 	stageSelectManyExisting
 	stageChooseCategoryCount
+	stageSetTariffUser
+	stageSetTariffChoice
 )
 
 type conversationState struct {
@@ -49,6 +51,8 @@ type conversationState struct {
 	AllowCustomCategory bool
 	SelectedInfos       []string
 	SelectedCats        []string
+	TargetUser          string
+	NewTariff           string
 }
 
 func formatOptions(opts []string) string {
@@ -301,6 +305,8 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 		a.handleInfoCommand(ctx, m)
 	case "/tariffs":
 		a.handleTariffsCommand(ctx, m)
+	case "/sett":
+		a.handleSetTariffCommand(ctx, m)
 		//case "/test":
 	//	a.handleTestCmd(ctx, m)
 	default:
@@ -387,6 +393,28 @@ func (a *App) setCommands(ctx context.Context) {
 	if err := a.tgClient.SetCommands(ctx, cmds); err != nil {
 		log.Println("set commands:", err)
 	}
+}
+
+func (a *App) setUserTariff(ctx context.Context, username, tariff string) error {
+	users, err := a.repo.List(ctx)
+	if err != nil {
+		return err
+	}
+	var user *model.UserSettings
+	for _, u := range users {
+		if strings.EqualFold(u.UserName, username) {
+			user = u
+			break
+		}
+	}
+	if user == nil {
+		return fmt.Errorf("user %s not found", username)
+	}
+	if _, ok := a.cfg.Tariffs[tariff]; !ok {
+		return fmt.Errorf("unknown tariff")
+	}
+	user.Tariff = tariff
+	return a.repo.Save(ctx, user)
 }
 
 func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *conversationState) {
@@ -712,6 +740,37 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			}
 		}
 		delete(a.convs, m.Chat.ID)
+
+	case stageSetTariffUser:
+		username := strings.TrimPrefix(strings.TrimSpace(m.Text), "@")
+		if username == "" {
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, "Введите username пользователя", nil)
+			c.LastMsgID = msg
+			return
+		}
+		c.TargetUser = username
+		tariffs := []string{"base", "plus", "premium", "ultimate"}
+		prompt := "Выберите тариф"
+		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, [][]string{tariffs})
+		c.Stage = stageSetTariffChoice
+		c.LastMsgID = msgID
+
+	case stageSetTariffChoice:
+		choice := strings.TrimSpace(m.Text)
+		if choice != "base" && choice != "plus" && choice != "premium" && choice != "ultimate" {
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, "Выберите тариф", [][]string{{"base", "plus", "premium", "ultimate"}})
+			c.LastMsgID = msg
+			return
+		}
+		c.NewTariff = choice
+		a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
+		a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+		if err := a.setUserTariff(ctx, c.TargetUser, c.NewTariff); err != nil {
+			a.sendMessage(ctx, m.Chat.ID, "Ошибка: "+err.Error(), nil)
+		} else {
+			a.sendMessage(ctx, m.Chat.ID, "Тариф обновлен", nil)
+		}
+		delete(a.convs, m.Chat.ID)
 	}
 }
 
@@ -891,4 +950,14 @@ func (a *App) handleInfoCommand(ctx context.Context, m *telegram.Message) {
 func (a *App) handleTariffsCommand(ctx context.Context, m *telegram.Message) {
 	log.Printf("user %d(@%s) called /tariffs", m.Chat.ID, m.Chat.Username)
 	a.sendLongMessage(ctx, m.Chat.ID, a.messages["tariffs"])
+}
+
+func (a *App) handleSetTariffCommand(ctx context.Context, m *telegram.Message) {
+	if m.Chat.Username != "omilinov" {
+		return
+	}
+	conv := &conversationState{Stage: stageSetTariffUser}
+	a.convs[m.Chat.ID] = conv
+	msgID, _ := a.sendMessage(ctx, m.Chat.ID, "Введите username пользователя", nil)
+	conv.LastMsgID = msgID
 }
