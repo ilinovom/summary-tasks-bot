@@ -15,8 +15,8 @@ import (
 
 // AIClient describes the part of the OpenAI client used by the service.
 type AIClient interface {
-	ChatCompletion(ctx context.Context, model, prompt string) (string, error)
-	ChatResponses(ctx context.Context, model, prompt string) (string, error)
+	ChatCompletion(ctx context.Context, model, prompt string, maxTokens int) (string, error)
+	ChatResponses(ctx context.Context, model, prompt string, maxTokens int) (string, error)
 }
 
 type UserService struct {
@@ -74,17 +74,17 @@ func (s *UserService) GetNews(ctx context.Context, u *model.UserSettings) (strin
 	if !ok {
 		log.Fatal("tariff for user is not set", u.UserID)
 	}
-	prompt := t.Prompt
+	prompt := t.GPT.PromptMain
 	prompt = strings.ReplaceAll(prompt, "{тип}", info)
 	prompt = strings.ReplaceAll(prompt, "{категория}", category)
-	prompt = strings.ReplaceAll(prompt, "{тон}", t.Style)
-	prompt = strings.ReplaceAll(prompt, "{объём}", t.Volume)
+	prompt = strings.ReplaceAll(prompt, "{тон}", t.GPT.Style)
+	prompt = strings.ReplaceAll(prompt, "{объём}", t.GPT.Volume)
 	var resp string
 	var err error
 	if s.openai == nil {
 		resp = prompt
 	} else {
-		resp, err = s.openai.ChatCompletion(ctx, t.GptModelVersion, prompt)
+		resp, err = s.openai.ChatCompletion(ctx, t.GPT.Model, prompt, t.GPT.MaxTokens)
 		if err != nil {
 			return "", err
 		}
@@ -113,17 +113,17 @@ func (s *UserService) GetNewsForCategory(ctx context.Context, u *model.UserSetti
 	if !ok {
 		log.Fatal("tariff for user is not set", u.UserID)
 	}
-	prompt := t.Prompt
+	prompt := t.GPT.PromptMain
 	prompt = strings.ReplaceAll(prompt, "{тип}", info)
 	prompt = strings.ReplaceAll(prompt, "{категория}", category)
-	prompt = strings.ReplaceAll(prompt, "{тон}", t.Style)
-	prompt = strings.ReplaceAll(prompt, "{объём}", t.Volume)
+	prompt = strings.ReplaceAll(prompt, "{тон}", t.GPT.Style)
+	prompt = strings.ReplaceAll(prompt, "{объём}", t.GPT.Volume)
 	var resp string
 	var err error
 	if s.openai == nil {
 		resp = prompt
 	} else {
-		resp, err = s.openai.ChatCompletion(ctx, t.GptModelVersion, prompt)
+		resp, err = s.openai.ChatCompletion(ctx, t.GPT.Model, prompt, t.GPT.MaxTokens)
 		if err != nil {
 			return "", err
 		}
@@ -148,16 +148,16 @@ func (s *UserService) GetLast24hNewsForCategory(ctx context.Context, u *model.Us
 	if !ok {
 		log.Fatal("tariff for user is not set", u.UserID)
 	}
-	prompt := t.PromptLast24h
+	prompt := t.GPT.PromptLast24h
 	prompt = strings.ReplaceAll(prompt, "{категория}", category)
-	prompt = strings.ReplaceAll(prompt, "{тон}", t.Style)
-	prompt = strings.ReplaceAll(prompt, "{объём}", t.Volume)
+	prompt = strings.ReplaceAll(prompt, "{тон}", t.GPT.Style)
+	prompt = strings.ReplaceAll(prompt, "{объём}", t.GPT.Volume)
 	var resp string
 	var err error
 	if s.openai == nil {
 		resp = prompt
 	} else {
-		resp, err = s.openai.ChatResponses(ctx, t.GptModelVersion, prompt)
+		resp, err = s.openai.ChatResponses(ctx, t.GPT.Model, prompt, t.GPT.MaxTokens)
 		if err != nil {
 			return "", err
 		}

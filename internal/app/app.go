@@ -276,11 +276,11 @@ func (a *App) scheduleMessages(ctx context.Context) {
 				if !ok {
 					tariff = a.cfg.Tariffs["base"]
 				}
-				if !inTimeRange(now, tariff.TimeRangeScheduledMsgSendPerDay) {
+				if !inTimeRange(now, tariff.Schedule.TimeRange) {
 					continue
 				}
 				last := time.Unix(u.LastScheduledSent, 0)
-				if now.Sub(last) < time.Duration(tariff.FrequencyScheduledMsgSendInMinutes)*time.Minute {
+				if now.Sub(last) < time.Duration(tariff.Schedule.FrequencyMinutes)*time.Minute {
 					continue
 				}
 				msg, err := a.userService.GetNews(ctx, u)
@@ -327,8 +327,8 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		t := a.cfg.Tariffs["base"]
 		c.Stage = stageCategory
 		c.Step = 0
-		c.CategoryLimit = t.CategoryNumLimit
-		c.InfoLimit = t.InfoTypeNumLimit
+		c.CategoryLimit = t.Limits.CategoryLimit
+		c.InfoLimit = t.Limits.InfoTypeLimit
 		c.AllowCustomCategory = t.AllowCustomCategory
 		opts := addCustomOption(a.categoryOptions, c.AllowCustomCategory)
 		prompt := fmt.Sprintf("Выберите категорию №1:\n%s\nВведите номер.", formatOptions(opts))
@@ -528,7 +528,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		if now.YearDay() != last.YearDay() || now.Year() != last.Year() {
 			c.Settings.GetNewsNowCount = 0
 		}
-		if c.Settings.GetNewsNowCount >= tariff.NumberGetNewsNowMessagesPerDay {
+		if c.Settings.GetNewsNowCount >= tariff.Limits.GetNewsNowPerDay {
 			a.sendMessage(ctx, m.Chat.ID, "Лимит исчерпан на сегодня", nil)
 			delete(a.convs, m.Chat.ID)
 			return
@@ -669,7 +669,7 @@ func (a *App) handleGetNewsNowCommand(ctx context.Context, m *telegram.Message) 
 	if now.YearDay() != last.YearDay() || now.Year() != last.Year() {
 		settings.GetNewsNowCount = 0
 	}
-	if settings.GetNewsNowCount >= tariff.NumberGetNewsNowMessagesPerDay {
+	if settings.GetNewsNowCount >= tariff.Limits.GetNewsNowPerDay {
 		a.sendMessage(ctx, m.Chat.ID, "Лимит исчерпан на сегодня", nil)
 
 		return
@@ -724,7 +724,7 @@ func (a *App) handleUpdateTopicsCommand(ctx context.Context, m *telegram.Message
 			tariff = t
 		}
 	}
-	conv := &conversationState{UpdateTopics: true, CategoryLimit: tariff.CategoryNumLimit, InfoLimit: tariff.InfoTypeNumLimit, AllowCustomCategory: tariff.AllowCustomCategory}
+	conv := &conversationState{UpdateTopics: true, CategoryLimit: tariff.Limits.CategoryLimit, InfoLimit: tariff.Limits.InfoTypeLimit, AllowCustomCategory: tariff.AllowCustomCategory}
 	if err == nil && len(settings.Topics) > 0 {
 		conv.Stage = stageUpdateChoice
 		conv.Topics = make(map[string][]string, len(settings.Topics))
