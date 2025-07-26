@@ -212,6 +212,8 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 		a.handleMyTopicsCommand(ctx, m)
 	case "/update_topics":
 		a.handleUpdateTopicsCommand(ctx, m)
+	//case "/test":
+	//	a.handleTestCmd(ctx, m)
 	default:
 		log.Printf("user %d(@%s) texted: %s", m.Chat.ID, m.Chat.Username, m.Text)
 		promt := "Я не понимаю текст вне команд. Чтобы увидеть команды, нажми кнопку `Меню` или вызови команду  `/start`"
