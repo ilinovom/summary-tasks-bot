@@ -18,5 +18,6 @@ WORKDIR /app
 COPY --from=build /src/bot /app/bot
 COPY options.json options.json
 COPY tariff.json tariff.json
+COPY messages.json messages.json
 
 CMD ["/app/bot"]
