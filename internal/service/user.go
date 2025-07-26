@@ -182,3 +182,28 @@ func (s *UserService) ActiveUsers(ctx context.Context) ([]*model.UserSettings, e
 	}
 	return out, nil
 }
+
+func (s *UserService) GetByUsername(ctx context.Context, username string) (*model.UserSettings, error) {
+	all, err := s.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, u := range all {
+		if strings.EqualFold(u.UserName, username) {
+			return u, nil
+		}
+	}
+	return nil, os.ErrNotExist
+}
+
+func (s *UserService) SetTariff(ctx context.Context, userID int64, tariff string) error {
+	if _, ok := s.tariffs[tariff]; !ok {
+		return errors.New("unknown tariff")
+	}
+	u, err := s.repo.Get(ctx, userID)
+	if err != nil {
+		return err
+	}
+	u.Tariff = tariff
+	return s.repo.Save(ctx, u)
+}

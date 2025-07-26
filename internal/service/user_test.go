@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ilinovom/summary-tasks-bot/internal/config"
 	"github.com/ilinovom/summary-tasks-bot/internal/model"
 	"github.com/ilinovom/summary-tasks-bot/internal/repository"
 )
@@ -65,5 +66,24 @@ func TestUserService_StartStop(t *testing.T) {
 	u, _ = repo.Get(ctx, 1)
 	if u.Active {
 		t.Fatalf("expected inactive")
+	}
+}
+
+func TestUserService_GetByUsername_SetTariff(t *testing.T) {
+	repo := newMemRepo()
+	svc := NewUserService(repo, nil, map[string]config.Tariff{"base": {}, "plus": {}})
+	ctx := context.Background()
+
+	repo.Save(ctx, &model.UserSettings{UserID: 1, UserName: "user1"})
+	u, err := svc.GetByUsername(ctx, "user1")
+	if err != nil || u.UserID != 1 {
+		t.Fatalf("get by username failed: %v", err)
+	}
+	if err := svc.SetTariff(ctx, 1, "plus"); err != nil {
+		t.Fatalf("set tariff: %v", err)
+	}
+	u2, _ := repo.Get(ctx, 1)
+	if u2.Tariff != "plus" {
+		t.Fatalf("tariff not updated")
 	}
 }
