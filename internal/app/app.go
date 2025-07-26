@@ -490,6 +490,9 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			}
 		}
 		prompt := fmt.Sprintf(a.messages["prompt_choose_existing_multi"], formatOptions(c.AvailableCats))
+		if len(c.SelectedCats) > 0 {
+			prompt += "\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedCats, ", "))
+		}
 		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(c.AvailableCats)))
 		c.LastMsgID = msgID
 
