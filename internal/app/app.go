@@ -374,15 +374,15 @@ func (a *App) scheduleMessages(ctx context.Context) {
 
 func (a *App) setCommands(ctx context.Context) {
 	cmds := []telegram.BotCommand{
-		{Command: "start", Description: "Start interaction"},
-		{Command: "update_topics", Description: "Update your topics"},
-		{Command: "add_topic", Description: "Add new topics"},
-		{Command: "get_news_now", Description: "Get news immediately"},
-		{Command: "get_last_24h_news", Description: "News from last 24h"},
-		{Command: "my_topics", Description: "Show my topics"},
-		{Command: "info", Description: "Show bot commands"},
-		{Command: "tariffs", Description: "Tariff details"},
-		{Command: "stop", Description: "Stop receiving updates"},
+		{Command: "start", Description: "Начать взаимодействие со мной"},
+		{Command: "info", Description: "Посмотреть доступные команды"},
+		{Command: "tariffs", Description: "Посмотреть существующие тарифы и их возможности"},
+		{Command: "update_topics", Description: "Обновить категории и типы информации"},
+		{Command: "add_topic", Description: "Добавить категории с типом информации"},
+		{Command: "get_news_now", Description: "Получить информацию по заданной категории сейчас"},
+		{Command: "get_last_24h_news", Description: "Получить новости за 24 часа по заданной категории сейчас"},
+		{Command: "my_topics", Description: "Показать список заданных категорий и типов информации"},
+		{Command: "stop", Description: "Остановить отправку сообщений"},
 	}
 	if err := a.tgClient.SetCommands(ctx, cmds); err != nil {
 		log.Println("set commands:", err)
@@ -441,7 +441,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			c.Stage = stageSelectManyExisting
 			prompt := fmt.Sprintf(a.messages["prompt_choose_existing_multi"], formatOptions(c.AvailableCats))
 			if len(c.SelectedCats) > 0 {
-				prompt += "\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedCats, ", "))
+				prompt += "\n\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedCats, ", "))
 			}
 			msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(c.AvailableCats)))
 			c.LastMsgID = msgID
@@ -497,7 +497,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		}
 		prompt := fmt.Sprintf(a.messages["prompt_choose_existing_multi"], formatOptions(c.AvailableCats))
 		if len(c.SelectedCats) > 0 {
-			prompt += "\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedCats, ", "))
+			prompt += "\n\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedCats, ", "))
 		}
 		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(c.AvailableCats)))
 		c.LastMsgID = msgID
@@ -557,7 +557,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			if len(c.SelectedInfos) == 0 && len(c.Topics[c.CurrentCat]) == 0 {
 				prompt := fmt.Sprintf(a.messages["prompt_choose_info"], c.CurrentCat, c.InfoLimit, formatOptions(a.infoOptions))
 				if len(c.SelectedInfos) > 0 {
-					prompt += "\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedInfos, ", "))
+					prompt += "\n\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedInfos, ", "))
 				}
 				msg, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(a.infoOptions)))
 				c.LastMsgID = msg
@@ -568,7 +568,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			if len(infos) == 0 {
 				prompt := fmt.Sprintf(a.messages["prompt_choose_info"], c.CurrentCat, c.InfoLimit, formatOptions(a.infoOptions))
 				if len(c.SelectedInfos) > 0 {
-					prompt += "\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedInfos, ", "))
+					prompt += "\n\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedInfos, ", "))
 				}
 				msg, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(a.infoOptions)))
 				c.LastMsgID = msg
@@ -591,7 +591,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			if len(c.SelectedInfos) < c.InfoLimit {
 				prompt := fmt.Sprintf(a.messages["prompt_choose_info"], c.CurrentCat, c.InfoLimit, formatOptions(a.infoOptions))
 				if len(c.SelectedInfos) > 0 {
-					prompt += "\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedInfos, ", "))
+					prompt += "\n\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedInfos, ", "))
 				}
 				msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(a.infoOptions)))
 				c.LastMsgID = msgID
