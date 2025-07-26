@@ -49,9 +49,11 @@ type Config struct {
 	OptionsFile   string
 	PromptFile    string
 	TariffFile    string
+	MessagesFile  string
 
-	Options Options
-	Tariffs map[string]Tariff
+	Options  Options
+	Tariffs  map[string]Tariff
+	Messages map[string]string
 }
 
 // FromEnv loads configuration from environment variables. TELEGRAM_TOKEN is required.
@@ -68,6 +70,7 @@ func FromEnv() (*Config, error) {
 		SettingsPath:  os.Getenv("SETTINGS_FILE"),
 		OptionsFile:   os.Getenv("OPTIONS_FILE"),
 		TariffFile:    os.Getenv("TARIFF_FILE"),
+		MessagesFile:  os.Getenv("MESSAGES_FILE"),
 	}
 	if c.TelegramToken == "" {
 		return nil, errors.New("TELEGRAM_TOKEN is not set")
@@ -87,10 +90,16 @@ func FromEnv() (*Config, error) {
 	if c.TariffFile == "" {
 		c.TariffFile = "tariff.json"
 	}
+	if c.MessagesFile == "" {
+		c.MessagesFile = "messages.json"
+	}
 	if err := c.loadOptions(); err != nil {
 		return nil, err
 	}
 	if err := c.loadTariffs(); err != nil {
+		return nil, err
+	}
+	if err := c.loadMessages(); err != nil {
 		return nil, err
 	}
 	return c, nil
@@ -112,4 +121,13 @@ func (c *Config) loadTariffs() error {
 	}
 	defer file.Close()
 	return json.NewDecoder(file).Decode(&c.Tariffs)
+}
+
+func (c *Config) loadMessages() error {
+	file, err := os.Open(c.MessagesFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return json.NewDecoder(file).Decode(&c.Messages)
 }
