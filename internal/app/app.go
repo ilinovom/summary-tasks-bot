@@ -62,7 +62,7 @@ func addCustomOption(opts []string, allow bool) []string {
 	}
 	out := make([]string, len(opts)+1)
 	copy(out, opts)
-	out[len(opts)] = "Своя категория"
+	out[len(opts)] = "😇Своя категория"
 	return out
 }
 
@@ -338,7 +338,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		c.LastMsgID = msgID
 
 	case stageUpdateChoice:
-		choice := parseSelection(m.Text, []string{"Обновить все", "Обновить одну"}, 1)
+		choice := parseSelection(m.Text, []string{"Обновить одну", "Обновить все"}, 1)
 		if len(choice) == 0 {
 			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], [][]string{{"1", "2"}})
 			c.LastMsgID = msg
@@ -393,7 +393,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		}
 		a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
 		a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
-		if c.AllowCustomCategory && cats[0] == "Своя категория" {
+		if c.AllowCustomCategory && cats[0] == "😇Своя категория" {
 			c.Stage = stageCustomCategory
 			msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["enter_custom_category"], nil)
 			c.LastMsgID = msgID
@@ -401,7 +401,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		}
 		c.CurrentCat = cats[0]
 		c.Stage = stageInfoTypes
-		prompt := fmt.Sprintf(a.messages["prompt_choose_info"], c.CurrentCat, formatOptions(a.infoOptions), c.InfoLimit)
+		prompt := fmt.Sprintf(a.messages["prompt_choose_info"], c.CurrentCat, c.InfoLimit, formatOptions(a.infoOptions))
 		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.infoOptions)))
 		c.LastMsgID = msgID
 
@@ -416,7 +416,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
 		c.CurrentCat = strings.Join(words, " ")
 		c.Stage = stageInfoTypes
-		prompt := fmt.Sprintf(a.messages["prompt_choose_info"], c.CurrentCat, formatOptions(a.infoOptions), c.InfoLimit)
+		prompt := fmt.Sprintf(a.messages["prompt_choose_info"], c.CurrentCat, c.InfoLimit, formatOptions(a.infoOptions))
 		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(a.infoOptions)))
 		c.LastMsgID = msgID
 

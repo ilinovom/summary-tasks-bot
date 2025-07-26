@@ -91,7 +91,7 @@ func (c *Client) ChatResponses(ctx context.Context, model, prompt string, maxTok
 		"input": []map[string]string{{"role": "user", "content": prompt}},
 	}
 	if maxTokens > 0 {
-		reqBody["max_tokens"] = maxTokens
+		reqBody["max_output_tokens"] = maxTokens
 	}
 
 	//// Пример добавления функции поиска
