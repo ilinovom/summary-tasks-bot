@@ -127,7 +127,7 @@ func New(cfg *config.Config, repo repository.UserSettingsRepository) *App {
 func (a *App) sendMessage(ctx context.Context, chatID int64, text string, kb [][]string) (int, error) {
 	msgID, err := a.tgClient.SendMessage(ctx, chatID, text, kb)
 	if err != nil {
-		log.Printf("telegram send message: %v", err)
+		log.Printf("telegram send message: %v\ntext: %s", err, text)
 	}
 	return msgID, err
 }
