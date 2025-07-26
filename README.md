@@ -8,7 +8,10 @@ It is intentionally minimal and uses only the standard library.
 The bot understands the following commands:
 
 * `/start` – start receiving periodic updates about default categories.
-* `/update_topics <topic1> <topic2>` – update the categories you are interested in.
+* `/info` – show all available commands.
+* `/tariffs` – see a description of the tariffs.
+* `/update_topics` – update the categories you are interested in.
+* `/add_topic` – add more categories without resetting everything.
 * `/get_news_now` – request an immediate news summary based on your preferences.
 * `/get_last_24h_news` – get a recap of news from the last 24 hours for one of your categories (Plus and higher).
 * `/my_topics` – show your selected info types and categories.
