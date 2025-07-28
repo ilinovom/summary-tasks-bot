@@ -103,6 +103,44 @@ func (s *UserService) GetNews(ctx context.Context, u *model.UserSettings) (strin
 	return prefix + resp, nil
 }
 
+// GetNewsMultiInfo returns news for one random category with all selected info types.
+func (s *UserService) GetNewsMultiInfo(ctx context.Context, u *model.UserSettings) (string, error) {
+	if len(u.Topics) == 0 {
+		return "", errors.New("no topics")
+	}
+	cats := make([]string, 0, len(u.Topics))
+	for c := range u.Topics {
+		cats = append(cats, c)
+	}
+	category := cats[rand.Intn(len(cats))]
+	infos := u.Topics[category]
+	t, ok := s.tariffs[u.Tariff]
+	if !ok {
+		log.Fatal("tariff for user is not set", u.UserID)
+	}
+	var parts []string
+	parts = append(parts, "Категория: "+category)
+	for _, info := range infos {
+		prompt := t.GPT.PromptMain
+		prompt = strings.ReplaceAll(prompt, "{тип}", info)
+		prompt = strings.ReplaceAll(prompt, "{категория}", category)
+		prompt = strings.ReplaceAll(prompt, "{тон}", t.GPT.Style)
+		prompt = strings.ReplaceAll(prompt, "{объём}", t.GPT.Volume)
+		var resp string
+		var err error
+		if s.openai == nil {
+			resp = prompt
+		} else {
+			resp, err = s.openai.ChatCompletion(ctx, t.GPT.Model, prompt, t.GPT.MaxTokens)
+			if err != nil {
+				return "", err
+			}
+		}
+		parts = append(parts, "\nТип: "+info+"\n"+resp)
+	}
+	return strings.Join(parts, "\n"), nil
+}
+
 // GetNewsForCategory returns news for a specific category.
 func (s *UserService) GetNewsForCategory(ctx context.Context, u *model.UserSettings, category string) (string, error) {
 	info := ""
@@ -140,6 +178,39 @@ func (s *UserService) GetNewsForCategory(ctx context.Context, u *model.UserSetti
 		prefix += "\n\n"
 	}
 	return prefix + resp, nil
+}
+
+// GetNewsForCategoryMultiInfo returns news for a specific category with all selected info types.
+func (s *UserService) GetNewsForCategoryMultiInfo(ctx context.Context, u *model.UserSettings, category string) (string, error) {
+	infos, ok := u.Topics[category]
+	if !ok || len(infos) == 0 {
+		return "", errors.New("no infos for category")
+	}
+	t, ok := s.tariffs[u.Tariff]
+	if !ok {
+		log.Fatal("tariff for user is not set", u.UserID)
+	}
+	var parts []string
+	parts = append(parts, "Категория: "+category)
+	for _, info := range infos {
+		prompt := t.GPT.PromptMain
+		prompt = strings.ReplaceAll(prompt, "{тип}", info)
+		prompt = strings.ReplaceAll(prompt, "{категория}", category)
+		prompt = strings.ReplaceAll(prompt, "{тон}", t.GPT.Style)
+		prompt = strings.ReplaceAll(prompt, "{объём}", t.GPT.Volume)
+		var resp string
+		var err error
+		if s.openai == nil {
+			resp = prompt
+		} else {
+			resp, err = s.openai.ChatCompletion(ctx, t.GPT.Model, prompt, t.GPT.MaxTokens)
+			if err != nil {
+				return "", err
+			}
+		}
+		parts = append(parts, "\nТип: "+info+"\n"+resp)
+	}
+	return strings.Join(parts, "\n"), nil
 }
 
 // GetLast24hNewsForCategory returns news for a category from the last 24 hours.
