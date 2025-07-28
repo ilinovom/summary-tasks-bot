@@ -389,15 +389,15 @@ func (a *App) setCommands(ctx context.Context) {
 	cmds := []telegram.BotCommand{
 		{Command: "start", Description: "Начать взаимодействие со мной"},
 		{Command: "info", Description: "Посмотреть доступные команды"},
+		{Command: "topics", Description: "Управление категориями и типам информации"},
 		{Command: "tariffs", Description: "Посмотреть существующие тарифы и их возможности"},
-		{Command: "topics", Description: "Управление темами"},
-		{Command: "update_topics", Description: "Обновить категории и типы информации"},
-		{Command: "add_topic", Description: "Добавить категории с типом информации"},
-		{Command: "delete_topics", Description: "Удалить категории"},
 		{Command: "get_news_now", Description: "Получить информацию по заданной категории сейчас"},
 		{Command: "get_last_24h_news", Description: "Получить новости за 24 часа по заданной категории сейчас"},
-		{Command: "my_topics", Description: "Показать список заданных категорий и типов информации"},
 		{Command: "stop", Description: "Остановить отправку сообщений"},
+		//{Command: "update_topics", Description: "Обновить категории и типы информации"},
+		//{Command: "add_topic", Description: "Добавить категории с типом информации"},
+		//{Command: "delete_topics", Description: "Удалить категории"},
+		//{Command: "my_topics", Description: "Показать список заданных категорий и типов информации"},
 	}
 	if err := a.tgClient.SetCommands(ctx, cmds); err != nil {
 		log.Println("set commands:", err)
@@ -1008,8 +1008,8 @@ func (a *App) handleAddTopicCommand(ctx context.Context, m *telegram.Message) {
 
 func (a *App) handleTopicsCommand(ctx context.Context, m *telegram.Message) {
 	log.Printf("user %d(@%s) called /topics", m.Chat.ID, m.Chat.Username)
-	kb := [][]string{{"/update_topics"}, {"/add_topic"}, {"/delete_topics"}, {"/my_topics"}}
-	a.sendMessage(ctx, m.Chat.ID, a.messages["topics_menu"], kb)
+	//kb := [][]string{{"/update_topics"}, {"/add_topic"}, {"/delete_topics"}, {"/my_topics"}}
+	a.sendMessage(ctx, m.Chat.ID, a.messages["topics_menu"], nil)
 }
 
 func (a *App) handleDeleteTopicsCommand(ctx context.Context, m *telegram.Message) {
@@ -1044,7 +1044,7 @@ func (a *App) handleMyTopicsCommand(ctx context.Context, m *telegram.Message) {
 	for cat, types := range settings.Topics {
 		parts = append(parts, fmt.Sprintf("%s: %s", cat, strings.Join(types, ", ")))
 	}
-	msg := fmt.Sprintf(a.messages["your_topics"], strings.Join(parts, "\n"))
+	msg := fmt.Sprintf(a.messages["your_topics"], strings.Join(parts, "\n\n"))
 	a.sendMessage(ctx, m.Chat.ID, msg, nil)
 }
 
