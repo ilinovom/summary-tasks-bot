@@ -379,7 +379,7 @@ func (a *App) scheduleMessages(ctx context.Context) {
 					continue
 				}
 
-				msg, err := a.userService.GetNews(ctx, u)
+				msg, err := a.userService.GetNewsMultiInfo(ctx, u)
 				if err != nil {
 					log.Println("get news:", err)
 					continue
