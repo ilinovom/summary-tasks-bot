@@ -462,9 +462,16 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		c.LastMsgID = msgID
 
 	case stageUpdateChoice:
+		if strings.EqualFold(m.Text, "Готово") {
+			a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
+			a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+			a.sendMessage(ctx, m.Chat.ID, a.messages["no_changes"], nil)
+			delete(a.convs, m.Chat.ID)
+			return
+		}
 		choice := parseSelection(m.Text, []string{"Обновить все", "Обновить несколько"}, 1)
 		if len(choice) == 0 {
-			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], [][]string{{"1", "2"}})
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], [][]string{{"1", "2"}, {"Готово"}})
 			c.LastMsgID = msg
 			return
 		}
@@ -494,9 +501,16 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		c.LastMsgID = msgID
 
 	case stageDeleteChoice:
+		if strings.EqualFold(m.Text, "Готово") {
+			a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
+			a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+			a.sendMessage(ctx, m.Chat.ID, a.messages["no_changes"], nil)
+			delete(a.convs, m.Chat.ID)
+			return
+		}
 		choice := parseSelection(m.Text, []string{"Удалить все", "Удалить несколько"}, 1)
 		if len(choice) == 0 {
-			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_delete_action"], [][]string{{"1", "2"}})
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_delete_action"], [][]string{{"1", "2"}, {"Готово"}})
 			c.LastMsgID = msg
 			return
 		}
@@ -615,8 +629,8 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
 			a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
 			if c.Step == 0 {
-				msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], numberKeyboardWithDone(len(opts)))
-				c.LastMsgID = msg
+				a.sendMessage(ctx, m.Chat.ID, a.messages["no_changes"], nil)
+				delete(a.convs, m.Chat.ID)
 				return
 			}
 			a.saveTopics(ctx, m, c)
@@ -963,7 +977,7 @@ func (a *App) handleUpdateTopicsCommand(ctx context.Context, m *telegram.Message
 			conv.Topics[k] = append([]string(nil), v...)
 		}
 		a.convs[m.Chat.ID] = conv
-		msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], [][]string{{"1", "2"}})
+		msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], [][]string{{"1", "2"}, {"Готово"}})
 		conv.LastMsgID = msgID
 		return
 	}
@@ -1029,7 +1043,7 @@ func (a *App) handleDeleteTopicsCommand(ctx context.Context, m *telegram.Message
 	}
 	conv.Stage = stageDeleteChoice
 	a.convs[m.Chat.ID] = conv
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_delete_action"], [][]string{{"1", "2"}})
+	msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_delete_action"], [][]string{{"1", "2"}, {"Готово"}})
 	conv.LastMsgID = msgID
 }
 
