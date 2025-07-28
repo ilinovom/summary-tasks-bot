@@ -10,8 +10,10 @@ The bot understands the following commands:
 * `/start` – start receiving periodic updates about default categories.
 * `/info` – show all available commands.
 * `/tariffs` – see a description of the tariffs.
+* `/topics` – manage your topics (/update_topics, /add_topic, /delete_topics, /my_topics).
 * `/update_topics` – update the categories you are interested in.
 * `/add_topic` – add more categories without resetting everything.
+* `/delete_topics` – remove selected categories.
 * `/get_news_now` – request an immediate news summary based on your preferences.
 * `/get_last_24h_news` – get a recap of news from the last 24 hours for one of your categories (Plus and higher).
 * `/my_topics` – show your selected info types and categories.
