@@ -31,6 +31,8 @@ const (
 	stageGetNewsCategory
 	stageGetLast24hCategory
 	stageSelectManyExisting
+	stageDeleteChoice
+	stageSelectDelete
 	stageChooseCategoryCount
 	stageSetTariffUser
 	stageSetTariffChoice
@@ -43,6 +45,7 @@ type conversationState struct {
 	OldCat              string
 	Topics              map[string][]string
 	UpdateTopics        bool
+	DeleteTopics        bool
 	CategoryLimit       int
 	InfoLimit           int
 	LastMsgID           int
@@ -295,12 +298,16 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 		a.handleGetNewsNowCommand(ctx, m)
 	case "/get_last_24h_news":
 		a.handleGetLast24hNewsCommand(ctx, m)
+	case "/topics":
+		a.handleTopicsCommand(ctx, m)
 	case "/my_topics":
 		a.handleMyTopicsCommand(ctx, m)
 	case "/update_topics":
 		a.handleUpdateTopicsCommand(ctx, m)
-	case "/add_topic":
+	case "/add_topic", "/add_topics":
 		a.handleAddTopicCommand(ctx, m)
+	case "/delete_topics":
+		a.handleDeleteTopicsCommand(ctx, m)
 	case "/info":
 		a.handleInfoCommand(ctx, m)
 	case "/tariffs":
@@ -382,13 +389,15 @@ func (a *App) setCommands(ctx context.Context) {
 	cmds := []telegram.BotCommand{
 		{Command: "start", Description: "Начать взаимодействие со мной"},
 		{Command: "info", Description: "Посмотреть доступные команды"},
+		{Command: "topics", Description: "Управление категориями и типам информации"},
 		{Command: "tariffs", Description: "Посмотреть существующие тарифы и их возможности"},
-		{Command: "update_topics", Description: "Обновить категории и типы информации"},
-		{Command: "add_topic", Description: "Добавить категории с типом информации"},
 		{Command: "get_news_now", Description: "Получить информацию по заданной категории сейчас"},
 		{Command: "get_last_24h_news", Description: "Получить новости за 24 часа по заданной категории сейчас"},
-		{Command: "my_topics", Description: "Показать список заданных категорий и типов информации"},
 		{Command: "stop", Description: "Остановить отправку сообщений"},
+		//{Command: "update_topics", Description: "Обновить категории и типы информации"},
+		//{Command: "add_topic", Description: "Добавить категории с типом информации"},
+		//{Command: "delete_topics", Description: "Удалить категории"},
+		//{Command: "my_topics", Description: "Показать список заданных категорий и типов информации"},
 	}
 	if err := a.tgClient.SetCommands(ctx, cmds); err != nil {
 		log.Println("set commands:", err)
@@ -484,6 +493,34 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(opts)))
 		c.LastMsgID = msgID
 
+	case stageDeleteChoice:
+		choice := parseSelection(m.Text, []string{"Удалить все", "Удалить несколько"}, 1)
+		if len(choice) == 0 {
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_delete_action"], [][]string{{"1", "2"}})
+			c.LastMsgID = msg
+			return
+		}
+		a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
+		a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+		if choice[0] == "Удалить несколько" {
+			c.AvailableCats = make([]string, 0, len(c.Topics))
+			for cat := range c.Topics {
+				c.AvailableCats = append(c.AvailableCats, cat)
+			}
+			c.Stage = stageSelectDelete
+			prompt := fmt.Sprintf(a.messages["prompt_choose_delete_multi"], formatOptions(c.AvailableCats))
+			if len(c.SelectedCats) > 0 {
+				prompt += "\n\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedCats, ", "))
+			}
+			msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(c.AvailableCats)))
+			c.LastMsgID = msgID
+			return
+		}
+
+		c.Topics = map[string][]string{}
+		a.saveTopics(ctx, m, c)
+		return
+
 	case stageSelectManyExisting:
 		if strings.EqualFold(m.Text, "Готово") {
 			a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
@@ -524,6 +561,48 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			}
 		}
 		prompt := fmt.Sprintf(a.messages["prompt_choose_existing_multi"], formatOptions(c.AvailableCats))
+		if len(c.SelectedCats) > 0 {
+			prompt += "\n\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedCats, ", "))
+		}
+		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(c.AvailableCats)))
+		c.LastMsgID = msgID
+
+	case stageSelectDelete:
+		if strings.EqualFold(m.Text, "Готово") {
+			a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
+			a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+			if len(c.SelectedCats) == 0 {
+				a.sendMessage(ctx, m.Chat.ID, a.messages["no_changes"], nil)
+				delete(a.convs, m.Chat.ID)
+				return
+			}
+			for _, cat := range c.SelectedCats {
+				delete(c.Topics, cat)
+			}
+			a.saveTopics(ctx, m, c)
+			return
+		}
+		cats := parseSelection(m.Text, c.AvailableCats, len(c.AvailableCats))
+		if len(cats) == 0 {
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], numberKeyboardWithDone(len(c.AvailableCats)))
+			c.LastMsgID = msg
+			return
+		}
+		a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
+		a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+		for _, cat := range cats {
+			exists := false
+			for _, ex := range c.SelectedCats {
+				if ex == cat {
+					exists = true
+					break
+				}
+			}
+			if !exists {
+				c.SelectedCats = append(c.SelectedCats, cat)
+			}
+		}
+		prompt := fmt.Sprintf(a.messages["prompt_choose_delete_multi"], formatOptions(c.AvailableCats))
 		if len(c.SelectedCats) > 0 {
 			prompt += "\n\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedCats, ", "))
 		}
@@ -927,6 +1006,33 @@ func (a *App) handleAddTopicCommand(ctx context.Context, m *telegram.Message) {
 	conv.LastMsgID = msgID
 }
 
+func (a *App) handleTopicsCommand(ctx context.Context, m *telegram.Message) {
+	log.Printf("user %d(@%s) called /topics", m.Chat.ID, m.Chat.Username)
+	//kb := [][]string{{"/update_topics"}, {"/add_topic"}, {"/delete_topics"}, {"/my_topics"}}
+	a.sendMessage(ctx, m.Chat.ID, a.messages["topics_menu"], nil)
+}
+
+func (a *App) handleDeleteTopicsCommand(ctx context.Context, m *telegram.Message) {
+	log.Printf("user %d(@%s) called /delete_topics", m.Chat.ID, m.Chat.Username)
+	settings, err := a.repo.Get(ctx, m.Chat.ID)
+	if err != nil {
+		a.sendMessage(ctx, m.Chat.ID, a.messages["start_first"], nil)
+		return
+	}
+	if len(settings.Topics) == 0 {
+		a.sendMessage(ctx, m.Chat.ID, a.messages["no_topics"], nil)
+		return
+	}
+	conv := &conversationState{UpdateTopics: true, DeleteTopics: true, Topics: make(map[string][]string, len(settings.Topics))}
+	for k, v := range settings.Topics {
+		conv.Topics[k] = append([]string(nil), v...)
+	}
+	conv.Stage = stageDeleteChoice
+	a.convs[m.Chat.ID] = conv
+	msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_delete_action"], [][]string{{"1", "2"}})
+	conv.LastMsgID = msgID
+}
+
 func (a *App) handleMyTopicsCommand(ctx context.Context, m *telegram.Message) {
 	log.Printf("user %d(@%s) called /my_topics", m.Chat.ID, m.Chat.Username)
 	settings, err := a.repo.Get(ctx, m.Chat.ID)
@@ -938,7 +1044,7 @@ func (a *App) handleMyTopicsCommand(ctx context.Context, m *telegram.Message) {
 	for cat, types := range settings.Topics {
 		parts = append(parts, fmt.Sprintf("%s: %s", cat, strings.Join(types, ", ")))
 	}
-	msg := fmt.Sprintf(a.messages["your_topics"], strings.Join(parts, "\n"))
+	msg := fmt.Sprintf(a.messages["your_topics"], strings.Join(parts, "\n\n"))
 	a.sendMessage(ctx, m.Chat.ID, msg, nil)
 }
 
