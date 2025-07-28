@@ -220,9 +220,15 @@ func (a *App) saveTopics(ctx context.Context, m *telegram.Message, c *conversati
 			parts = append(parts, fmt.Sprintf("%s: %s", cat, strings.Join(types, ", ")))
 		}
 		a.sendMessage(ctx, m.Chat.ID, fmt.Sprintf(a.messages["settings_saved"], strings.Join(parts, "\n")), nil)
-		msg, err := a.userService.GetNews(ctx, settings)
+		msg, err := a.userService.GetNewsMultiInfo(ctx, settings)
 		if err == nil {
-			a.sendMessage(ctx, m.Chat.ID, msg, nil)
+			if len([]rune(msg)) > 4096 {
+				if err := a.sendLongMessage(ctx, m.Chat.ID, msg); err != nil {
+					log.Println("send msg err: ", err)
+				}
+			} else {
+				a.sendMessage(ctx, m.Chat.ID, msg, nil)
+			}
 		} else {
 			log.Println("get news:", err)
 		}
@@ -804,13 +810,19 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		if err := a.repo.Save(ctx, c.Settings); err != nil {
 			log.Println("save settings:", err)
 		}
-		msg, err := a.userService.GetNewsForCategory(ctx, c.Settings, cats[0])
+		msg, err := a.userService.GetNewsForCategoryMultiInfo(ctx, c.Settings, cats[0])
 		if err != nil {
 			log.Println("get news:", err)
 			delete(a.convs, m.Chat.ID)
 			return
 		}
-		a.sendMessage(ctx, m.Chat.ID, msg, nil)
+		if len([]rune(msg)) > 4096 {
+			if err := a.sendLongMessage(ctx, m.Chat.ID, msg); err != nil {
+				log.Println("send msg err: ", err)
+			}
+		} else {
+			a.sendMessage(ctx, m.Chat.ID, msg, nil)
+		}
 		delete(a.convs, m.Chat.ID)
 
 	case stageGetLast24hCategory:

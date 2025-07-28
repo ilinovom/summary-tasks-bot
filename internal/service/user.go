@@ -180,6 +180,39 @@ func (s *UserService) GetNewsForCategory(ctx context.Context, u *model.UserSetti
 	return prefix + resp, nil
 }
 
+// GetNewsForCategoryMultiInfo returns news for a specific category with all selected info types.
+func (s *UserService) GetNewsForCategoryMultiInfo(ctx context.Context, u *model.UserSettings, category string) (string, error) {
+	infos, ok := u.Topics[category]
+	if !ok || len(infos) == 0 {
+		return "", errors.New("no infos for category")
+	}
+	t, ok := s.tariffs[u.Tariff]
+	if !ok {
+		log.Fatal("tariff for user is not set", u.UserID)
+	}
+	var parts []string
+	parts = append(parts, "Категория: "+category)
+	for _, info := range infos {
+		prompt := t.GPT.PromptMain
+		prompt = strings.ReplaceAll(prompt, "{тип}", info)
+		prompt = strings.ReplaceAll(prompt, "{категория}", category)
+		prompt = strings.ReplaceAll(prompt, "{тон}", t.GPT.Style)
+		prompt = strings.ReplaceAll(prompt, "{объём}", t.GPT.Volume)
+		var resp string
+		var err error
+		if s.openai == nil {
+			resp = prompt
+		} else {
+			resp, err = s.openai.ChatCompletion(ctx, t.GPT.Model, prompt, t.GPT.MaxTokens)
+			if err != nil {
+				return "", err
+			}
+		}
+		parts = append(parts, "\nТип: "+info+"\n"+resp)
+	}
+	return strings.Join(parts, "\n"), nil
+}
+
 // GetLast24hNewsForCategory returns news for a category from the last 24 hours.
 func (s *UserService) GetLast24hNewsForCategory(ctx context.Context, u *model.UserSettings, category string) (string, error) {
 	t, ok := s.tariffs[u.Tariff]
