@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"regexp"
@@ -137,13 +138,71 @@ func (c *Client) ChatResponses(ctx context.Context, model, prompt string, maxTok
 }
 
 func markdownToTelegramHTML(input string) string {
-	// Жирный
+	// Экранируем спецсимволы
+	input = html.EscapeString(input)
+
+	// Жирный (**…**)
 	reBold := regexp.MustCompile(`\*\*(.*?)\*\*`)
 	input = reBold.ReplaceAllString(input, "<b>$1</b>")
 
-	// Ссылки [text](url)
+	// Курсив (*…*)
+	reItalic := regexp.MustCompile(`\*(.*?)\*`)
+	input = reItalic.ReplaceAllString(input, "<i>$1</i>")
+
+	// Ссылки [текст](url)
 	reLink := regexp.MustCompile(`\[(.*?)\]\((.*?)\)`)
 	input = reLink.ReplaceAllString(input, `<a href="$2">$1</a>`)
 
 	return input
 }
+
+//// Разрешённые теги для Telegram
+//var allowedTags = map[string]bool{
+//	"b":      true,
+//	"strong": true,
+//	"i":      true,
+//	"em":     true,
+//	"u":      true,
+//	"s":      true,
+//	"strike": true,
+//	"del":    true,
+//	"a":      true,
+//	"code":   true,
+//	"pre":    true,
+//}
+//
+//// Конвертация Markdown в Telegram HTML
+//func markdownToTelegramHTML(md string) (string, error) {
+//	// Конвертируем Markdown в обычный HTML
+//	var buf bytes.Buffer
+//	if err := goldmark.Convert([]byte(md), &buf); err != nil {
+//		return "", err
+//	}
+//	html := buf.String()
+//
+//	// Убираем запрещённые теги
+//	re := regexp.MustCompile(`</?([a-zA-Z0-9]+)(\s[^>]*)?>`)
+//	html = re.ReplaceAllStringFunc(html, func(tag string) string {
+//		// Оставляем только разрешённые теги
+//		tagName := strings.Trim(tag, "</> ")
+//		tagName = strings.Split(tagName, " ")[0] // отрезаем атрибуты
+//		if allowedTags[tagName] {
+//			// Если тег <a>, оставляем href
+//			if strings.HasPrefix(tag, "<a ") || strings.HasPrefix(tag, "</a") {
+//				return tag
+//			}
+//			// Остальные возвращаем как есть
+//			return tag
+//		}
+//		return "" // убираем запрещённые теги
+//	})
+//
+//	// Убираем лишние <p> и заменяем их на переносы строк
+//	html = strings.ReplaceAll(html, "<p>", "")
+//	html = strings.ReplaceAll(html, "</p>", "\n")
+//
+//	// Убираем лишние пробелы
+//	html = strings.TrimSpace(html)
+//
+//	return html, nil
+//}

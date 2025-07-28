@@ -850,7 +850,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			return
 		}
 
-		msgWait, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["wait_search"], numberKeyboard(len(c.AvailableCats)))
+		msgWait, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["wait_search"], nil)
 
 		msg, err := a.userService.GetLast24hNewsForCategory(ctx, c.Settings, cats[0])
 		if err != nil {
