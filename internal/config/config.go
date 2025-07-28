@@ -18,9 +18,10 @@ type Schedule struct {
 }
 
 type Limits struct {
-	GetNewsNowPerDay int `json:"get_news_now_per_day"`
-	CategoryLimit    int `json:"category_limit"`
-	InfoTypeLimit    int `json:"info_type_limit"`
+	GetNewsNowPerDay    int `json:"get_news_now_per_day"`
+	GetLast24hNewPerDay int `json:"get_last_24h_new_per_day"`
+	CategoryLimit       int `json:"category_limit"`
+	InfoTypeLimit       int `json:"info_type_limit"`
 }
 
 type GPTConfig struct {

@@ -208,6 +208,8 @@ func (a *App) saveTopics(ctx context.Context, m *telegram.Message, c *conversati
 		LastScheduledSent: 0,
 		LastGetNewsNow:    0,
 		GetNewsNowCount:   0,
+		LastGetLast24h:    0,
+		GetLast24hCount:   0,
 		Active:            true,
 	}
 	if err := a.repo.Save(ctx, settings); err != nil {
@@ -368,6 +370,15 @@ func (a *App) scheduleMessages(ctx context.Context) {
 				if now.Sub(last) < time.Duration(tariff.Schedule.FrequencyMinutes)*time.Minute {
 					continue
 				}
+				if len(u.Topics) == 0 {
+					a.sendMessage(ctx, u.UserID, "Вы не задали категории. Если хотите получать автоматические сообщения для расширения кругозора, то задайте темы с помощью /update_topics или же остановите автоматическую рассылку с помощью команды /stop", nil)
+					u.LastScheduledSent = now.Unix()
+					if err := a.repo.Save(ctx, u); err != nil {
+						log.Println("save settings:", err)
+					}
+					continue
+				}
+
 				msg, err := a.userService.GetNews(ctx, u)
 				if err != nil {
 					log.Println("get news:", err)
@@ -666,7 +677,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		}
 		a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
 		a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
-		c.CurrentCat = strings.Join(words, " ")
+		c.CurrentCat = "🫆" + strings.Join(words, " ")
 		c.Stage = stageInfoTypes
 		c.SelectedInfos = nil
 		prompt := fmt.Sprintf(a.messages["prompt_choose_info"], c.CurrentCat, c.InfoLimit, formatOptions(a.infoOptions))
@@ -812,6 +823,21 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
 		a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
 
+		tariff, ok := a.cfg.Tariffs[c.Settings.Tariff]
+		if !ok {
+			tariff = a.cfg.Tariffs["base"]
+		}
+		now := time.Now()
+		last := time.Unix(c.Settings.LastGetLast24h, 0)
+		if now.YearDay() != last.YearDay() || now.Year() != last.Year() {
+			c.Settings.GetLast24hCount = 0
+		}
+		if c.Settings.GetLast24hCount >= tariff.Limits.GetLast24hNewPerDay {
+			a.sendMessage(ctx, m.Chat.ID, a.messages["limit_today"], nil)
+			delete(a.convs, m.Chat.ID)
+			return
+		}
+
 		msgWait, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["wait_search"], numberKeyboard(len(c.AvailableCats)))
 
 		msg, err := a.userService.GetLast24hNewsForCategory(ctx, c.Settings, cats[0])
@@ -822,6 +848,11 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		}
 
 		a.deleteMessage(ctx, m.Chat.ID, msgWait)
+		c.Settings.GetLast24hCount++
+		c.Settings.LastGetLast24h = now.Unix()
+		if err := a.repo.Save(ctx, c.Settings); err != nil {
+			log.Println("save settings:", err)
+		}
 		if len([]rune(msg)) > 4096 {
 			if err := a.sendLongMessage(ctx, m.Chat.ID, msg); err != nil {
 				log.Println("send msg err: ", err)
@@ -943,6 +974,19 @@ func (a *App) handleGetLast24hNewsCommand(ctx context.Context, m *telegram.Messa
 	}
 	if settings.Tariff != "plus" && settings.Tariff != "premium" && settings.Tariff != "ultimate" {
 		a.sendMessage(ctx, m.Chat.ID, a.messages["plus_only"], nil)
+		return
+	}
+	tariff, ok := a.cfg.Tariffs[settings.Tariff]
+	if !ok {
+		tariff = a.cfg.Tariffs["base"]
+	}
+	now := time.Now()
+	last := time.Unix(settings.LastGetLast24h, 0)
+	if now.YearDay() != last.YearDay() || now.Year() != last.Year() {
+		settings.GetLast24hCount = 0
+	}
+	if settings.GetLast24hCount >= tariff.Limits.GetLast24hNewPerDay {
+		a.sendMessage(ctx, m.Chat.ID, a.messages["limit_today"], nil)
 		return
 	}
 	if len(settings.Topics) == 0 {
