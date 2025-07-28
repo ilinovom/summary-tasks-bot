@@ -205,7 +205,7 @@ func (a *App) saveTopics(ctx context.Context, m *telegram.Message, c *conversati
 		UserName:          m.Chat.Username,
 		Topics:            c.Topics,
 		Tariff:            "base",
-		LastScheduledSent: 0,
+		LastScheduledSent: time.Now().Unix(),
 		LastGetNewsNow:    0,
 		GetNewsNowCount:   0,
 		LastGetLast24h:    0,
