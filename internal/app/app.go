@@ -1018,7 +1018,7 @@ func (a *App) handleGetNewsNowCommand(ctx context.Context, m *telegram.Message) 
 	}
 	a.convs[m.Chat.ID] = conv
 	prompt := fmt.Sprintf(a.messages["prompt_choose_news_cat"], formatOptions(conv.AvailableCats))
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBack(numberKeyboard(len(conv.AvailableCats))))
+	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboard(len(conv.AvailableCats))))
 	conv.LastMsgID = msgID
 }
 
@@ -1057,7 +1057,7 @@ func (a *App) handleGetLast24hNewsCommand(ctx context.Context, m *telegram.Messa
 	}
 	a.convs[m.Chat.ID] = conv
 	prompt := fmt.Sprintf(a.messages["prompt_choose_last24_cat"], formatOptions(conv.AvailableCats))
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBack(numberKeyboard(len(conv.AvailableCats))))
+	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboard(len(conv.AvailableCats))))
 	conv.LastMsgID = msgID
 }
 
@@ -1078,14 +1078,14 @@ func (a *App) handleUpdateTopicsCommand(ctx context.Context, m *telegram.Message
 			conv.Topics[k] = append([]string(nil), v...)
 		}
 		a.convs[m.Chat.ID] = conv
-		msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], addBack(numberKeyboardWithDone(2)))
+		msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], addBackCancel(numberKeyboardWithDone(2)))
 		conv.LastMsgID = msgID
 		return
 	}
 	conv.Stage = stageCategory
 	a.convs[m.Chat.ID] = conv
 	prompt := fmt.Sprintf(a.messages["prompt_choose_category"], 1, formatOptions(a.categoryOptions))
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBack(numberKeyboardWithDone(len(a.categoryOptions))))
+	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboardWithDone(len(a.categoryOptions))))
 	conv.LastMsgID = msgID
 }
 
@@ -1117,7 +1117,7 @@ func (a *App) handleAddTopicCommand(ctx context.Context, m *telegram.Message) {
 	conv.Stage = stageCategory
 	a.convs[m.Chat.ID] = conv
 	prompt := fmt.Sprintf(a.messages["prompt_choose_category"], len(conv.Topics)+1, formatOptions(a.categoryOptions))
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBack(numberKeyboardWithDone(len(a.categoryOptions))))
+	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboardWithDone(len(a.categoryOptions))))
 	conv.LastMsgID = msgID
 }
 
@@ -1144,7 +1144,7 @@ func (a *App) handleDeleteTopicsCommand(ctx context.Context, m *telegram.Message
 	}
 	conv.Stage = stageDeleteChoice
 	a.convs[m.Chat.ID] = conv
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_delete_action"], addBack(numberKeyboardWithDone(2)))
+	msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_delete_action"], addBackCancel(numberKeyboardWithDone(2)))
 	conv.LastMsgID = msgID
 }
 
