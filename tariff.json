@@ -1,8 +1,8 @@
 {
   "base": {
     "schedule": {
-      "frequency_minutes": 180,
-      "time_range": "05:00-19:30"
+      "frequency_minutes": 880,
+      "time_range": "05:00-19:00"
     },
     "limits": {
       "get_news_now_per_day": 5,
@@ -22,8 +22,8 @@
   },
   "plus": {
     "schedule": {
-      "frequency_minutes": 90,
-      "time_range": "04:00-20:30"
+      "frequency_minutes": 450,
+      "time_range": "05:00-19:00"
     },
     "limits": {
       "get_news_now_per_day": 10,
@@ -43,8 +43,8 @@
   },
   "premium": {
     "schedule": {
-      "frequency_minutes": 60,
-      "time_range": "05:00-19:30"
+      "frequency_minutes": 450,
+      "time_range": "05:00-19:00"
     },
     "limits": {
       "get_news_now_per_day": 20,
@@ -64,8 +64,8 @@
   },
   "ultimate": {
     "schedule": {
-      "frequency_minutes": 30,
-      "time_range": "05:00-19:30"
+      "frequency_minutes": 450,
+      "time_range": "05:00-19:00"
     },
     "limits": {
       "get_news_now_per_day": 40,

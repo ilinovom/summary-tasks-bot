@@ -40,6 +40,7 @@ const (
 
 type conversationState struct {
 	Stage               convStage
+	PrevStage           convStage
 	Step                int
 	CurrentCat          string
 	OldCat              string
@@ -94,6 +95,18 @@ func parseSelection(text string, opts []string, limit int) []string {
 	return out
 }
 
+func (c *conversationState) setStage(s convStage) {
+	c.PrevStage = c.Stage
+	c.Stage = s
+}
+
+func (c *conversationState) back() {
+	if c.PrevStage != 0 {
+		c.Stage = c.PrevStage
+		c.PrevStage = 0
+	}
+}
+
 func numberKeyboard(n int) [][]string {
 	rows := [][]string{}
 	row := []string{}
@@ -114,6 +127,18 @@ func numberKeyboardWithDone(n int) [][]string {
 	rows := numberKeyboard(n)
 	rows = append(rows, []string{"Готово"})
 	return rows
+}
+
+func addBack(kb [][]string) [][]string {
+	return append(kb, []string{"Назад"})
+}
+
+func addBackCancel(kb [][]string) [][]string {
+	return append(kb, []string{"Назад", "Отмена"})
+}
+
+func addCancel(kb [][]string) [][]string {
+	return append(kb, []string{"Отмена"})
 }
 
 // App coordinates the services and telegram client.
@@ -444,6 +469,20 @@ func (a *App) setUserTariff(ctx context.Context, username, tariff string) error 
 }
 
 func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *conversationState) {
+	if strings.EqualFold(m.Text, "Отмена") {
+		a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
+		a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+		a.sendMessage(ctx, m.Chat.ID, a.messages["cancelled"], nil)
+		delete(a.convs, m.Chat.ID)
+		return
+	}
+	if strings.EqualFold(m.Text, "Назад") && c.PrevStage == 0 {
+		a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
+		a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+		c.back()
+		a.continueConversation(ctx, &telegram.Message{Chat: m.Chat}, c)
+		return
+	}
 	switch c.Stage {
 	case stageWelcome:
 		if strings.TrimSpace(m.Text) != "Продолжить" {
@@ -458,37 +497,37 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		c.CategoryLimit = t.Limits.CategoryLimit
 		c.InfoLimit = t.Limits.InfoTypeLimit
 		c.AllowCustomCategory = t.AllowCustomCategory
-		c.Stage = stageChooseCategoryCount
+		c.setStage(stageChooseCategoryCount)
 		prompt := fmt.Sprintf(a.messages["prompt_choose_count"], c.CategoryLimit)
-		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(c.CategoryLimit))
+		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBack(numberKeyboard(c.CategoryLimit)))
 		c.LastMsgID = msgID
 	case stageChooseCategoryCount:
 		count, err := strconv.Atoi(strings.TrimSpace(m.Text))
 		if err != nil || count < 1 || count > c.CategoryLimit {
-			msg, _ := a.sendMessage(ctx, m.Chat.ID, fmt.Sprintf(a.messages["prompt_choose_count"], c.CategoryLimit), numberKeyboard(c.CategoryLimit))
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, fmt.Sprintf(a.messages["prompt_choose_count"], c.CategoryLimit), addBack(numberKeyboard(c.CategoryLimit)))
 			c.LastMsgID = msg
 			return
 		}
 		a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
 		a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
 		c.CategoryLimit = count
-		c.Stage = stageCategory
+		c.setStage(stageCategory)
 		opts := addCustomOption(a.categoryOptions, c.AllowCustomCategory)
 		prompt := fmt.Sprintf(a.messages["prompt_choose_category"], 1, formatOptions(opts))
-		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(opts)))
+		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBack(numberKeyboardWithDone(len(opts))))
 		c.LastMsgID = msgID
 
 	case stageUpdateChoice:
-		if strings.EqualFold(m.Text, "Готово") {
-			a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
-			a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
-			a.sendMessage(ctx, m.Chat.ID, a.messages["no_changes"], nil)
-			delete(a.convs, m.Chat.ID)
-			return
-		}
+		//if strings.EqualFold(m.Text, "Готово") {
+		//	a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
+		//	a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+		//	a.sendMessage(ctx, m.Chat.ID, a.messages["no_changes"], nil)
+		//	delete(a.convs, m.Chat.ID)
+		//	return
+		//}
 		choice := parseSelection(m.Text, []string{"Обновить все", "Обновить несколько"}, 1)
 		if len(choice) == 0 {
-			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], [][]string{{"1", "2"}, {"Готово"}})
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], addCancel(numberKeyboard(2)))
 			c.LastMsgID = msg
 			return
 		}
@@ -499,22 +538,22 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			for cat := range c.Topics {
 				c.AvailableCats = append(c.AvailableCats, cat)
 			}
-			c.Stage = stageSelectManyExisting
+			c.setStage(stageSelectManyExisting)
 			prompt := fmt.Sprintf(a.messages["prompt_choose_existing_multi"], formatOptions(c.AvailableCats))
 			if len(c.SelectedCats) > 0 {
 				prompt += "\n\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedCats, ", "))
 			}
-			msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(c.AvailableCats)))
+			msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboard(len(c.AvailableCats))))
 			c.LastMsgID = msgID
 			return
 		}
 
 		c.Topics = map[string][]string{}
 		c.Step = 0
-		c.Stage = stageCategory
+		c.setStage(stageCategory)
 		opts := addCustomOption(a.categoryOptions, c.AllowCustomCategory)
 		prompt := fmt.Sprintf(a.messages["prompt_choose_category"], 1, formatOptions(opts))
-		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(opts)))
+		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboard(len(opts))))
 		c.LastMsgID = msgID
 
 	case stageDeleteChoice:
@@ -527,7 +566,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		}
 		choice := parseSelection(m.Text, []string{"Удалить все", "Удалить несколько"}, 1)
 		if len(choice) == 0 {
-			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_delete_action"], [][]string{{"1", "2"}, {"Готово"}})
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_delete_action"], addBack(numberKeyboardWithDone(2)))
 			c.LastMsgID = msg
 			return
 		}
@@ -538,12 +577,12 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			for cat := range c.Topics {
 				c.AvailableCats = append(c.AvailableCats, cat)
 			}
-			c.Stage = stageSelectDelete
+			c.setStage(stageSelectDelete)
 			prompt := fmt.Sprintf(a.messages["prompt_choose_delete_multi"], formatOptions(c.AvailableCats))
 			if len(c.SelectedCats) > 0 {
 				prompt += "\n\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedCats, ", "))
 			}
-			msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(c.AvailableCats)))
+			msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBack(numberKeyboardWithDone(len(c.AvailableCats))))
 			c.LastMsgID = msgID
 			return
 		}
@@ -564,16 +603,27 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			c.CategoryLimit = len(c.SelectedCats)
 			c.Step = 0
 			c.OldCat = c.SelectedCats[0]
-			c.Stage = stageCategory
+			c.setStage(stageCategory)
 			opts := addCustomOption(a.categoryOptions, c.AllowCustomCategory)
 			prompt := fmt.Sprintf(a.messages["prompt_choose_new"], c.OldCat, formatOptions(opts))
-			msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(opts)))
+			msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboard(len(opts))))
 			c.LastMsgID = msgID
 			return
 		}
+
+		if strings.EqualFold(m.Text, "Назад") {
+			a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
+			a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+			c.setStage(stageUpdateChoice)
+			c.SelectedCats = nil
+			msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], addCancel(numberKeyboard(2)))
+			c.LastMsgID = msgID
+			return
+		}
+
 		cats := parseSelection(m.Text, c.AvailableCats, len(c.AvailableCats))
 		if len(cats) == 0 {
-			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], numberKeyboardWithDone(len(c.AvailableCats)))
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], addBack(numberKeyboardWithDone(len(c.AvailableCats))))
 			c.LastMsgID = msg
 			return
 		}
@@ -595,7 +645,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		if len(c.SelectedCats) > 0 {
 			prompt += "\n\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedCats, ", "))
 		}
-		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(c.AvailableCats)))
+		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboardWithDone(len(c.AvailableCats))))
 		c.LastMsgID = msgID
 
 	case stageSelectDelete:
@@ -615,7 +665,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		}
 		cats := parseSelection(m.Text, c.AvailableCats, len(c.AvailableCats))
 		if len(cats) == 0 {
-			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], numberKeyboardWithDone(len(c.AvailableCats)))
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], addBack(numberKeyboardWithDone(len(c.AvailableCats))))
 			c.LastMsgID = msg
 			return
 		}
@@ -653,25 +703,44 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			a.saveTopics(ctx, m, c)
 			return
 		}
+
+		if strings.EqualFold(m.Text, "Назад") {
+			a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
+			a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+			if c.PrevStage == stageSelectManyExisting {
+				c.setStage(stageUpdateChoice)
+				c.SelectedCats = nil
+				m.Text = ""
+				msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], addCancel(numberKeyboard(2)))
+				c.LastMsgID = msgID
+				return
+			}
+			c.setStage(stageUpdateChoice)
+			c.OldCat = ""
+			msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], addCancel(numberKeyboard(2)))
+			c.LastMsgID = msgID
+			return
+		}
+
 		cats := parseSelection(m.Text, opts, 1)
 		if len(cats) == 0 {
-			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], numberKeyboardWithDone(len(opts)))
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], addBackCancel(numberKeyboard(len(opts))))
 			c.LastMsgID = msg
 			return
 		}
 		a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
 		a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
 		if c.AllowCustomCategory && cats[0] == "😇Своя категория" {
-			c.Stage = stageCustomCategory
+			c.setStage(stageCustomCategory)
 			msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["enter_custom_category"], nil)
 			c.LastMsgID = msgID
 			return
 		}
 		c.CurrentCat = cats[0]
 		c.SelectedInfos = nil
-		c.Stage = stageInfoTypes
+		c.setStage(stageInfoTypes)
 		prompt := fmt.Sprintf(a.messages["prompt_choose_info"], c.CurrentCat, c.InfoLimit, formatOptions(a.infoOptions))
-		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(a.infoOptions)))
+		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboard(len(a.infoOptions))))
 		c.LastMsgID = msgID
 
 	case stageCustomCategory:
@@ -684,20 +753,38 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
 		a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
 		c.CurrentCat = "🫆" + strings.Join(words, " ")
-		c.Stage = stageInfoTypes
+		c.setStage(stageInfoTypes)
 		c.SelectedInfos = nil
 		prompt := fmt.Sprintf(a.messages["prompt_choose_info"], c.CurrentCat, c.InfoLimit, formatOptions(a.infoOptions))
-		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(a.infoOptions)))
+		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBack(numberKeyboardWithDone(len(a.infoOptions))))
 		c.LastMsgID = msgID
 
 	case stageInfoTypes:
+		if strings.EqualFold(m.Text, "Назад") {
+			a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
+			a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+			c.setStage(stageCategory)
+
+			opts := addCustomOption(a.categoryOptions, c.AllowCustomCategory)
+			var prompt string
+			var msgID int
+			if c.OldCat != "" {
+				prompt = fmt.Sprintf(a.messages["prompt_choose_new"], c.OldCat, formatOptions(opts))
+				msgID, _ = a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboard(len(opts))))
+			} else {
+				prompt = fmt.Sprintf(a.messages["prompt_choose_category"], c.Step+1, formatOptions(opts))
+				msgID, _ = a.sendMessage(ctx, m.Chat.ID, prompt, addBack(numberKeyboardWithDone(len(opts))))
+			}
+			c.LastMsgID = msgID
+			return
+		}
 		if strings.EqualFold(m.Text, "Готово") {
 			if len(c.SelectedInfos) == 0 && len(c.Topics[c.CurrentCat]) == 0 {
 				prompt := fmt.Sprintf(a.messages["prompt_choose_info"], c.CurrentCat, c.InfoLimit, formatOptions(a.infoOptions))
 				if len(c.SelectedInfos) > 0 {
 					prompt += "\n\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedInfos, ", "))
 				}
-				msg, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(a.infoOptions)))
+				msg, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBack(numberKeyboardWithDone(len(a.infoOptions))))
 				c.LastMsgID = msg
 				return
 			}
@@ -708,7 +795,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 				if len(c.SelectedInfos) > 0 {
 					prompt += "\n\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedInfos, ", "))
 				}
-				msg, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(a.infoOptions)))
+				msg, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBack(numberKeyboardWithDone(len(a.infoOptions))))
 				c.LastMsgID = msg
 				return
 			}
@@ -731,7 +818,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 				if len(c.SelectedInfos) > 0 {
 					prompt += "\n\n" + fmt.Sprintf(a.messages["already_selected"], strings.Join(c.SelectedInfos, ", "))
 				}
-				msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(a.infoOptions)))
+				msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBack(numberKeyboardWithDone(len(a.infoOptions))))
 				c.LastMsgID = msgID
 				return
 			}
@@ -769,23 +856,23 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 
 		if len(c.SelectedCats) > 0 && c.Step < len(c.SelectedCats) {
 			c.OldCat = c.SelectedCats[c.Step]
-			c.Stage = stageCategory
+			c.setStage(stageCategory)
 			opts := addCustomOption(a.categoryOptions, c.AllowCustomCategory)
 			prompt := fmt.Sprintf(a.messages["prompt_choose_new"], c.OldCat, formatOptions(opts))
-			msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(opts)))
+			msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBack(numberKeyboard(len(opts))))
 			c.LastMsgID = msgID
 			return
 		}
 
-		c.Stage = stageCategory
+		c.setStage(stageCategory)
 		opts := addCustomOption(a.categoryOptions, c.AllowCustomCategory)
 		prompt := fmt.Sprintf(a.messages["prompt_choose_category"], c.Step+1, formatOptions(opts))
-		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(opts)))
+		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBack(numberKeyboardWithDone(len(opts))))
 		c.LastMsgID = msgID
 	case stageGetNewsCategory:
 		cats := parseSelection(m.Text, c.AvailableCats, 1)
 		if len(cats) == 0 {
-			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], numberKeyboard(len(c.AvailableCats)))
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], addBack(numberKeyboard(len(c.AvailableCats))))
 			c.LastMsgID = msg
 			return
 		}
@@ -828,7 +915,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 	case stageGetLast24hCategory:
 		cats := parseSelection(m.Text, c.AvailableCats, 1)
 		if len(cats) == 0 {
-			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], numberKeyboard(len(c.AvailableCats)))
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], addBack(numberKeyboard(len(c.AvailableCats))))
 			c.LastMsgID = msg
 			return
 		}
@@ -880,21 +967,21 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 	case stageSetTariffUser:
 		username := strings.TrimPrefix(strings.TrimSpace(m.Text), "@")
 		if username == "" {
-			msg, _ := a.sendMessage(ctx, m.Chat.ID, "Введите username пользователя", nil)
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, "Введите username пользователя", addBack(nil))
 			c.LastMsgID = msg
 			return
 		}
 		c.TargetUser = username
 		tariffs := []string{"base", "plus", "premium", "ultimate"}
 		prompt := "Выберите тариф"
-		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, [][]string{tariffs})
-		c.Stage = stageSetTariffChoice
+		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBack([][]string{tariffs}))
+		c.setStage(stageSetTariffChoice)
 		c.LastMsgID = msgID
 
 	case stageSetTariffChoice:
 		choice := strings.TrimSpace(m.Text)
 		if choice != "base" && choice != "plus" && choice != "premium" && choice != "ultimate" {
-			msg, _ := a.sendMessage(ctx, m.Chat.ID, "Выберите тариф", [][]string{{"base", "plus", "premium", "ultimate"}})
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, "Выберите тариф", addBack([][]string{{"base", "plus", "premium", "ultimate"}}))
 			c.LastMsgID = msg
 			return
 		}
@@ -973,7 +1060,7 @@ func (a *App) handleGetNewsNowCommand(ctx context.Context, m *telegram.Message) 
 	}
 	a.convs[m.Chat.ID] = conv
 	prompt := fmt.Sprintf(a.messages["prompt_choose_news_cat"], formatOptions(conv.AvailableCats))
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(conv.AvailableCats)))
+	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboard(len(conv.AvailableCats))))
 	conv.LastMsgID = msgID
 }
 
@@ -1012,7 +1099,7 @@ func (a *App) handleGetLast24hNewsCommand(ctx context.Context, m *telegram.Messa
 	}
 	a.convs[m.Chat.ID] = conv
 	prompt := fmt.Sprintf(a.messages["prompt_choose_last24_cat"], formatOptions(conv.AvailableCats))
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(conv.AvailableCats)))
+	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboard(len(conv.AvailableCats))))
 	conv.LastMsgID = msgID
 }
 
@@ -1033,14 +1120,14 @@ func (a *App) handleUpdateTopicsCommand(ctx context.Context, m *telegram.Message
 			conv.Topics[k] = append([]string(nil), v...)
 		}
 		a.convs[m.Chat.ID] = conv
-		msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], [][]string{{"1", "2"}, {"Готово"}})
+		msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], addCancel(numberKeyboard(2)))
 		conv.LastMsgID = msgID
 		return
 	}
 	conv.Stage = stageCategory
 	a.convs[m.Chat.ID] = conv
 	prompt := fmt.Sprintf(a.messages["prompt_choose_category"], 1, formatOptions(a.categoryOptions))
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(a.categoryOptions)))
+	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboardWithDone(len(a.categoryOptions))))
 	conv.LastMsgID = msgID
 }
 
@@ -1072,7 +1159,7 @@ func (a *App) handleAddTopicCommand(ctx context.Context, m *telegram.Message) {
 	conv.Stage = stageCategory
 	a.convs[m.Chat.ID] = conv
 	prompt := fmt.Sprintf(a.messages["prompt_choose_category"], len(conv.Topics)+1, formatOptions(a.categoryOptions))
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboardWithDone(len(a.categoryOptions)))
+	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addCancel(numberKeyboard(len(a.categoryOptions))))
 	conv.LastMsgID = msgID
 }
 
@@ -1099,7 +1186,7 @@ func (a *App) handleDeleteTopicsCommand(ctx context.Context, m *telegram.Message
 	}
 	conv.Stage = stageDeleteChoice
 	a.convs[m.Chat.ID] = conv
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_delete_action"], [][]string{{"1", "2"}, {"Готово"}})
+	msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_delete_action"], addCancel(numberKeyboard(2)))
 	conv.LastMsgID = msgID
 }
 
