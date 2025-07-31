@@ -856,10 +856,10 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 
 		if len(c.SelectedCats) > 0 && c.Step < len(c.SelectedCats) {
 			c.OldCat = c.SelectedCats[c.Step]
-			c.setStage(stageCategory)
+			c.Stage = stageCategory
 			opts := addCustomOption(a.categoryOptions, c.AllowCustomCategory)
 			prompt := fmt.Sprintf(a.messages["prompt_choose_new"], c.OldCat, formatOptions(opts))
-			msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBack(numberKeyboard(len(opts))))
+			msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, numberKeyboard(len(opts)))
 			c.LastMsgID = msgID
 			return
 		}
@@ -872,7 +872,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 	case stageGetNewsCategory:
 		cats := parseSelection(m.Text, c.AvailableCats, 1)
 		if len(cats) == 0 {
-			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], addBack(numberKeyboard(len(c.AvailableCats))))
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], addCancel(numberKeyboard(len(c.AvailableCats))))
 			c.LastMsgID = msg
 			return
 		}
@@ -915,7 +915,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 	case stageGetLast24hCategory:
 		cats := parseSelection(m.Text, c.AvailableCats, 1)
 		if len(cats) == 0 {
-			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], addBack(numberKeyboard(len(c.AvailableCats))))
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], addCancel(numberKeyboard(len(c.AvailableCats))))
 			c.LastMsgID = msg
 			return
 		}
@@ -1060,7 +1060,7 @@ func (a *App) handleGetNewsNowCommand(ctx context.Context, m *telegram.Message) 
 	}
 	a.convs[m.Chat.ID] = conv
 	prompt := fmt.Sprintf(a.messages["prompt_choose_news_cat"], formatOptions(conv.AvailableCats))
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboard(len(conv.AvailableCats))))
+	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addCancel(numberKeyboard(len(conv.AvailableCats))))
 	conv.LastMsgID = msgID
 }
 
@@ -1099,7 +1099,7 @@ func (a *App) handleGetLast24hNewsCommand(ctx context.Context, m *telegram.Messa
 	}
 	a.convs[m.Chat.ID] = conv
 	prompt := fmt.Sprintf(a.messages["prompt_choose_last24_cat"], formatOptions(conv.AvailableCats))
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboard(len(conv.AvailableCats))))
+	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addCancel(numberKeyboard(len(conv.AvailableCats))))
 	conv.LastMsgID = msgID
 }
 
@@ -1127,7 +1127,7 @@ func (a *App) handleUpdateTopicsCommand(ctx context.Context, m *telegram.Message
 	conv.Stage = stageCategory
 	a.convs[m.Chat.ID] = conv
 	prompt := fmt.Sprintf(a.messages["prompt_choose_category"], 1, formatOptions(a.categoryOptions))
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboardWithDone(len(a.categoryOptions))))
+	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addCancel(numberKeyboard(len(a.categoryOptions))))
 	conv.LastMsgID = msgID
 }
 
