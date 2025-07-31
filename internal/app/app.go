@@ -137,6 +137,10 @@ func addBackCancel(kb [][]string) [][]string {
 	return append(kb, []string{"Назад", "Отмена"})
 }
 
+func addCancel(kb [][]string) [][]string {
+	return append(kb, []string{"Отмена"})
+}
+
 // App coordinates the services and telegram client.
 type App struct {
 	cfg             *config.Config
@@ -472,7 +476,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		delete(a.convs, m.Chat.ID)
 		return
 	}
-	if strings.EqualFold(m.Text, "Назад") {
+	if strings.EqualFold(m.Text, "Назад") && c.PrevStage == 0 {
 		a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
 		a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
 		c.back()
@@ -514,16 +518,16 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		c.LastMsgID = msgID
 
 	case stageUpdateChoice:
-		if strings.EqualFold(m.Text, "Готово") {
-			a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
-			a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
-			a.sendMessage(ctx, m.Chat.ID, a.messages["no_changes"], nil)
-			delete(a.convs, m.Chat.ID)
-			return
-		}
+		//if strings.EqualFold(m.Text, "Готово") {
+		//	a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
+		//	a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+		//	a.sendMessage(ctx, m.Chat.ID, a.messages["no_changes"], nil)
+		//	delete(a.convs, m.Chat.ID)
+		//	return
+		//}
 		choice := parseSelection(m.Text, []string{"Обновить все", "Обновить несколько"}, 1)
 		if len(choice) == 0 {
-			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], addBack(numberKeyboardWithDone(2)))
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], addCancel(numberKeyboard(2)))
 			c.LastMsgID = msg
 			return
 		}
@@ -549,7 +553,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		c.setStage(stageCategory)
 		opts := addCustomOption(a.categoryOptions, c.AllowCustomCategory)
 		prompt := fmt.Sprintf(a.messages["prompt_choose_category"], 1, formatOptions(opts))
-		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBack(numberKeyboardWithDone(len(opts))))
+		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboard(len(opts))))
 		c.LastMsgID = msgID
 
 	case stageDeleteChoice:
@@ -688,9 +692,19 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 			a.saveTopics(ctx, m, c)
 			return
 		}
+
+		if strings.EqualFold(m.Text, "Назад") {
+			a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
+			a.deleteMessage(ctx, m.Chat.ID, c.LastMsgID)
+			c.setStage(stageUpdateChoice)
+			msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], addCancel(numberKeyboard(2)))
+			c.LastMsgID = msgID
+			return
+		}
+
 		cats := parseSelection(m.Text, opts, 1)
 		if len(cats) == 0 {
-			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], addBack(numberKeyboardWithDone(len(opts))))
+			msg, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_category_number"], addBackCancel(numberKeyboard(len(opts))))
 			c.LastMsgID = msg
 			return
 		}
@@ -706,7 +720,7 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		c.SelectedInfos = nil
 		c.setStage(stageInfoTypes)
 		prompt := fmt.Sprintf(a.messages["prompt_choose_info"], c.CurrentCat, c.InfoLimit, formatOptions(a.infoOptions))
-		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBack(numberKeyboardWithDone(len(a.infoOptions))))
+		msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboard(len(a.infoOptions))))
 		c.LastMsgID = msgID
 
 	case stageCustomCategory:
@@ -1078,7 +1092,7 @@ func (a *App) handleUpdateTopicsCommand(ctx context.Context, m *telegram.Message
 			conv.Topics[k] = append([]string(nil), v...)
 		}
 		a.convs[m.Chat.ID] = conv
-		msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], addBackCancel(numberKeyboardWithDone(2)))
+		msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], addCancel(numberKeyboard(2)))
 		conv.LastMsgID = msgID
 		return
 	}
@@ -1117,7 +1131,7 @@ func (a *App) handleAddTopicCommand(ctx context.Context, m *telegram.Message) {
 	conv.Stage = stageCategory
 	a.convs[m.Chat.ID] = conv
 	prompt := fmt.Sprintf(a.messages["prompt_choose_category"], len(conv.Topics)+1, formatOptions(a.categoryOptions))
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addBackCancel(numberKeyboardWithDone(len(a.categoryOptions))))
+	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addCancel(numberKeyboard(len(a.categoryOptions))))
 	conv.LastMsgID = msgID
 }
 
