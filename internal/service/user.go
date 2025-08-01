@@ -25,6 +25,7 @@ type UserService struct {
 	tariffs map[string]config.Tariff
 }
 
+// NewUserService assembles a service with the provided repository, AI client and tariff map.
 func NewUserService(repo repository.UserSettingsRepository, ai AIClient, tariffs map[string]config.Tariff) *UserService {
 	return &UserService{repo: repo, openai: ai, tariffs: tariffs}
 }
@@ -254,6 +255,7 @@ func (s *UserService) ActiveUsers(ctx context.Context) ([]*model.UserSettings, e
 	return out, nil
 }
 
+// GetByUsername fetches settings for a user by their Telegram username.
 func (s *UserService) GetByUsername(ctx context.Context, username string) (*model.UserSettings, error) {
 	all, err := s.repo.List(ctx)
 	if err != nil {
@@ -267,6 +269,7 @@ func (s *UserService) GetByUsername(ctx context.Context, username string) (*mode
 	return nil, os.ErrNotExist
 }
 
+// SetTariff assigns a new tariff to the given user.
 func (s *UserService) SetTariff(ctx context.Context, userID int64, tariff string) error {
 	if _, ok := s.tariffs[tariff]; !ok {
 		return errors.New("unknown tariff")

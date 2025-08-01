@@ -9,6 +9,7 @@ import (
 	"github.com/ilinovom/summary-tasks-bot/internal/model"
 )
 
+// TestFileUserSettingsRepository_CRUD exercises basic repository operations.
 func TestFileUserSettingsRepository_CRUD(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "settings.json")

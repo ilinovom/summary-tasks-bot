@@ -9,6 +9,7 @@ import (
 	"github.com/ilinovom/summary-tasks-bot/internal/repository"
 )
 
+// main loads configuration and starts the Telegram bot application.
 func main() {
 	cfg, err := config.FromEnv()
 	if err != nil {

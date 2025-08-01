@@ -18,6 +18,8 @@ type Client struct {
 	httpClient *http.Client
 }
 
+// NewClient creates an OpenAI API client. If baseURL is empty the official
+// endpoint is used.
 func NewClient(token, baseURL string) *Client {
 	if baseURL == "" {
 		baseURL = "https://api.openai.com/v1"
@@ -29,6 +31,7 @@ func NewClient(token, baseURL string) *Client {
 	}
 }
 
+// do performs a POST request to the given endpoint and decodes the response.
 func (c *Client) do(ctx context.Context, endpoint string, body any, out any) error {
 	b, err := json.Marshal(body)
 	if err != nil {
@@ -84,7 +87,7 @@ func (c *Client) ChatCompletion(ctx context.Context, model, prompt string, maxTo
 	return respBody.Choices[0].Message.Content, nil
 }
 
-// ChatResponses
+// ChatResponses calls the experimental /responses endpoint to get news with web search results.
 func (c *Client) ChatResponses(ctx context.Context, model, prompt string, maxTokens int) (string, error) {
 
 	reqBody := map[string]any{
@@ -137,6 +140,7 @@ func (c *Client) ChatResponses(ctx context.Context, model, prompt string, maxTok
 	return markdownToTelegramHTML(respBody.Output[1].Content[0].Text), nil
 }
 
+// markdownToTelegramHTML converts a subset of Markdown to HTML allowed by Telegram.
 func markdownToTelegramHTML(input string) string {
 	// Экранируем спецсимволы
 	input = html.EscapeString(input)
