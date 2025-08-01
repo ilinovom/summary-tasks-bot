@@ -138,7 +138,7 @@ func (c *Client) ChatResponses(ctx context.Context, model, prompt string, maxTok
 		return "", errors.New("openai: empty response")
 	}
 
-	return markdownToTelegramHTML(respBody.Output[1].Content[0].Text), nil
+	return markdownToTelegramHTML(removeDuplicateLines(respBody.Output[1].Content[0].Text)), nil
 }
 
 // markdownToTelegramHTML converts a subset of Markdown to HTML allowed by Telegram.
@@ -176,6 +176,25 @@ func removeUnclosedAnchor(text string) string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+func removeDuplicateLines(text string) string {
+	lines := strings.Split(strings.TrimSpace(text), "\n")
+	seen := make(map[string]bool)
+	var result []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue // пропускаем пустые строки
+		}
+		if !seen[trimmed] {
+			seen[trimmed] = true
+			result = append(result, line)
+		}
+	}
+
+	return strings.Join(result, "\n\n")
 }
 
 //// Разрешённые теги для Telegram
