@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strings"
 )
 
 type Client struct {
@@ -157,7 +158,24 @@ func markdownToTelegramHTML(input string) string {
 	reLink := regexp.MustCompile(`\[(.*?)\]\((.*?)\)`)
 	input = reLink.ReplaceAllString(input, `<a href="$2">$1</a>`)
 
-	return input
+	return removeUnclosedAnchor(input)
+}
+
+func removeUnclosedAnchor(text string) string {
+	lines := strings.Split(strings.TrimSpace(text), "\n")
+
+	if len(lines) == 0 {
+		return text
+	}
+
+	lastLine := lines[len(lines)-1]
+
+	// Проверяем наличие <a и отсутствие </a>
+	if strings.Contains(lastLine, "<a") && !strings.Contains(lastLine, "</a>") {
+		lines = lines[:len(lines)-1]
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 //// Разрешённые теги для Telegram
