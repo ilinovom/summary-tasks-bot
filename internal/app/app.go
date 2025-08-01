@@ -59,6 +59,8 @@ type conversationState struct {
 	NewTariff           string
 }
 
+// formatOptions turns the list of options into numbered lines suitable for a
+// Telegram message.
 func formatOptions(opts []string) string {
 	lines := make([]string, len(opts))
 	for i, o := range opts {
@@ -67,6 +69,8 @@ func formatOptions(opts []string) string {
 	return strings.Join(lines, "\n")
 }
 
+// addCustomOption adds the "custom" option to the provided slice if the user
+// is allowed to specify their own category.
 func addCustomOption(opts []string, allow bool) []string {
 	if !allow {
 		return opts
@@ -77,6 +81,8 @@ func addCustomOption(opts []string, allow bool) []string {
 	return out
 }
 
+// parseSelection parses comma or space separated option indexes from the user
+// input and returns the corresponding option values up to the provided limit.
 func parseSelection(text string, opts []string, limit int) []string {
 	fields := strings.FieldsFunc(text, func(r rune) bool { return r == ',' || r == ' ' })
 	out := []string{}
@@ -95,11 +101,14 @@ func parseSelection(text string, opts []string, limit int) []string {
 	return out
 }
 
+// setStage updates the conversation state and remembers the previous stage to
+// support navigating backward.
 func (c *conversationState) setStage(s convStage) {
 	c.PrevStage = c.Stage
 	c.Stage = s
 }
 
+// back returns the conversation to the previous stage if possible.
 func (c *conversationState) back() {
 	if c.PrevStage != 0 {
 		c.Stage = c.PrevStage
@@ -107,6 +116,7 @@ func (c *conversationState) back() {
 	}
 }
 
+// numberKeyboard builds a keyboard with numeric buttons from 1 to n.
 func numberKeyboard(n int) [][]string {
 	rows := [][]string{}
 	row := []string{}
@@ -123,20 +133,25 @@ func numberKeyboard(n int) [][]string {
 	return rows
 }
 
+// numberKeyboardWithDone builds a numeric keyboard and adds the "Done" button
+// as the last row.
 func numberKeyboardWithDone(n int) [][]string {
 	rows := numberKeyboard(n)
 	rows = append(rows, []string{"Готово"})
 	return rows
 }
 
+// addBack appends a "Back" button to the given keyboard.
 func addBack(kb [][]string) [][]string {
 	return append(kb, []string{"Назад"})
 }
 
+// addBackCancel appends "Back" and "Cancel" buttons to the keyboard.
 func addBackCancel(kb [][]string) [][]string {
 	return append(kb, []string{"Назад", "Отмена"})
 }
 
+// addCancel appends a "Cancel" button to the keyboard.
 func addCancel(kb [][]string) [][]string {
 	return append(kb, []string{"Отмена"})
 }
@@ -154,6 +169,7 @@ type App struct {
 	messages        map[string]string
 }
 
+// New constructs the application instance with all dependencies wired.
 func New(cfg *config.Config, repo repository.UserSettingsRepository) *App {
 	return &App{
 		cfg:             cfg,
@@ -167,6 +183,8 @@ func New(cfg *config.Config, repo repository.UserSettingsRepository) *App {
 	}
 }
 
+// sendMessage is a small wrapper around the Telegram client that logs failures
+// but still returns the message ID to the caller.
 func (a *App) sendMessage(ctx context.Context, chatID int64, text string, kb [][]string) (int, error) {
 	msgID, err := a.tgClient.SendMessage(ctx, chatID, text, kb)
 	if err != nil {
@@ -175,6 +193,8 @@ func (a *App) sendMessage(ctx context.Context, chatID int64, text string, kb [][
 	return msgID, err
 }
 
+// sendLongMessage splits a long message into several Telegram messages so that
+// each part fits into the platform's limit.
 func (a *App) sendLongMessage(ctx context.Context, chatID int64, text string) error {
 	const limit = 4096
 	runes := []rune(text)
@@ -192,12 +212,15 @@ func (a *App) sendLongMessage(ctx context.Context, chatID int64, text string) er
 	return nil
 }
 
+// deleteMessage removes a previously sent message and logs any deletion error.
 func (a *App) deleteMessage(ctx context.Context, chatID int64, messageID int) {
 	if err := a.tgClient.DeleteMessage(ctx, chatID, messageID); err != nil {
 		log.Printf("telegram delete message: %v", err)
 	}
 }
 
+// saveTopics persists the conversation topics to the repository. It also sends
+// a confirmation message to the user about the updated or created settings.
 func (a *App) saveTopics(ctx context.Context, m *telegram.Message, c *conversationState) {
 	var settings *model.UserSettings
 	var err error
@@ -261,6 +284,8 @@ func (a *App) saveTopics(ctx context.Context, m *telegram.Message, c *conversati
 	delete(a.convs, m.Chat.ID)
 }
 
+// Run starts the main application logic and blocks until the context is
+// cancelled. It launches goroutines for updates and scheduled messages.
 func (a *App) Run(ctx context.Context) error {
 	log.Println("application starting")
 	a.userService = service.NewUserService(a.repo, a.aiClient, a.cfg.Tariffs)
@@ -290,6 +315,8 @@ func (a *App) Run(ctx context.Context) error {
 	return nil
 }
 
+// handleUpdates continuously polls Telegram for updates and dispatches them
+// for further processing.
 func (a *App) handleUpdates(ctx context.Context) {
 	offset := 0
 	for {
@@ -315,6 +342,8 @@ func (a *App) handleUpdates(ctx context.Context) {
 	}
 }
 
+// handleMessage routes incoming user messages to the appropriate command
+// handlers or continues an existing conversation.
 func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 	// if user text first time
 	if conv, ok := a.convs[m.Chat.ID]; ok && conv.Stage != 0 && m.Text != "/start" {
@@ -356,6 +385,8 @@ func (a *App) handleMessage(ctx context.Context, m *telegram.Message) {
 	}
 }
 
+// inTimeRange checks whether the provided time falls within the "HH:MM-HH:MM"
+// range specified in rng. If the range is invalid the function returns true.
 func inTimeRange(now time.Time, rng string) bool {
 	parts := strings.Split(rng, "-")
 	if len(parts) != 2 {
@@ -375,6 +406,8 @@ func inTimeRange(now time.Time, rng string) bool {
 	return !now.Before(start) && !now.After(end)
 }
 
+// scheduleMessages periodically sends news digests to active users respecting
+// their tariff restrictions and configured time range.
 func (a *App) scheduleMessages(ctx context.Context) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -427,6 +460,8 @@ func (a *App) scheduleMessages(ctx context.Context) {
 	}
 }
 
+// setCommands registers the list of bot commands with Telegram so that users
+// see available commands in the UI.
 func (a *App) setCommands(ctx context.Context) {
 	cmds := []telegram.BotCommand{
 		{Command: "start", Description: "Начать взаимодействие со мной"},
@@ -446,6 +481,7 @@ func (a *App) setCommands(ctx context.Context) {
 	}
 }
 
+// setUserTariff changes the tariff for the specified username.
 func (a *App) setUserTariff(ctx context.Context, username, tariff string) error {
 	users, err := a.repo.List(ctx)
 	if err != nil {
@@ -468,6 +504,8 @@ func (a *App) setUserTariff(ctx context.Context, username, tariff string) error 
 	return a.repo.Save(ctx, user)
 }
 
+// continueConversation processes messages that are part of a multi-step dialog
+// and advances the conversation state machine accordingly.
 func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *conversationState) {
 	if strings.EqualFold(m.Text, "Отмена") {
 		a.deleteMessage(ctx, m.Chat.ID, m.MessageID)
@@ -995,232 +1033,4 @@ func (a *App) continueConversation(ctx context.Context, m *telegram.Message, c *
 		}
 		delete(a.convs, m.Chat.ID)
 	}
-}
-
-func (a *App) handleStartCommand(ctx context.Context, m *telegram.Message) {
-	log.Printf("user %d (@%s) called /start", m.Chat.ID, m.Chat.Username)
-	if _, err := a.repo.Get(ctx, m.Chat.ID); err != nil {
-		conv := &conversationState{Stage: stageWelcome}
-		a.convs[m.Chat.ID] = conv
-		msgID, err := a.sendMessage(ctx, m.Chat.ID, a.messages["start"], [][]string{{"Продолжить"}})
-		if err != nil {
-			log.Printf("error when sending message to chat id %v: %v", m.Chat.ID, err)
-		}
-		conv.LastMsgID = msgID
-		return
-	}
-	if err := a.userService.Start(ctx, m.Chat.ID, m.Chat.Username); err != nil {
-		log.Println("start:", err)
-	} else {
-		_, err := a.sendMessage(ctx, m.Chat.ID, a.messages["start"], nil)
-		if err != nil {
-			log.Printf("error when sending message to chat id %v: %v", m.Chat.ID, err)
-		}
-	}
-}
-
-func (a *App) handleStopCommand(ctx context.Context, m *telegram.Message) {
-	log.Printf("user %d(@%s) called /stop", m.Chat.ID, m.Chat.Username)
-	if err := a.userService.Stop(ctx, m.Chat.ID); err != nil {
-		log.Println("stop:", err)
-	} else {
-		a.sendMessage(ctx, m.Chat.ID, a.messages["stopped"], nil)
-	}
-}
-
-func (a *App) handleGetNewsNowCommand(ctx context.Context, m *telegram.Message) {
-	log.Printf("user %d(@%s) called /get_news_now", m.Chat.ID, m.Chat.Username)
-	settings, err := a.repo.Get(ctx, m.Chat.ID)
-	if err != nil {
-		a.sendMessage(ctx, m.Chat.ID, a.messages["start_first"], nil)
-		return
-	}
-	tariff, ok := a.cfg.Tariffs[settings.Tariff]
-	if !ok {
-		tariff = a.cfg.Tariffs["base"]
-	}
-	now := time.Now()
-	last := time.Unix(settings.LastGetNewsNow, 0)
-	if now.YearDay() != last.YearDay() || now.Year() != last.Year() {
-		settings.GetNewsNowCount = 0
-	}
-	if settings.GetNewsNowCount >= tariff.Limits.GetNewsNowPerDay {
-		a.sendMessage(ctx, m.Chat.ID, a.messages["limit_today"], nil)
-
-		return
-	}
-	if len(settings.Topics) == 0 {
-		a.sendMessage(ctx, m.Chat.ID, a.messages["no_topics"], nil)
-		return
-	}
-	conv := &conversationState{Stage: stageGetNewsCategory, Settings: settings}
-	conv.AvailableCats = make([]string, 0, len(settings.Topics))
-	for cat := range settings.Topics {
-		conv.AvailableCats = append(conv.AvailableCats, cat)
-	}
-	a.convs[m.Chat.ID] = conv
-	prompt := fmt.Sprintf(a.messages["prompt_choose_news_cat"], formatOptions(conv.AvailableCats))
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addCancel(numberKeyboard(len(conv.AvailableCats))))
-	conv.LastMsgID = msgID
-}
-
-func (a *App) handleGetLast24hNewsCommand(ctx context.Context, m *telegram.Message) {
-	log.Printf("user %d(@%s) called /get_last_24h_news", m.Chat.ID, m.Chat.Username)
-	settings, err := a.repo.Get(ctx, m.Chat.ID)
-	if err != nil {
-		a.sendMessage(ctx, m.Chat.ID, a.messages["start_first"], nil)
-		return
-	}
-	if settings.Tariff != "plus" && settings.Tariff != "premium" && settings.Tariff != "ultimate" {
-		a.sendMessage(ctx, m.Chat.ID, a.messages["plus_only"], nil)
-		return
-	}
-	tariff, ok := a.cfg.Tariffs[settings.Tariff]
-	if !ok {
-		tariff = a.cfg.Tariffs["base"]
-	}
-	now := time.Now()
-	last := time.Unix(settings.LastGetLast24h, 0)
-	if now.YearDay() != last.YearDay() || now.Year() != last.Year() {
-		settings.GetLast24hCount = 0
-	}
-	if settings.GetLast24hCount >= tariff.Limits.GetLast24hNewPerDay {
-		a.sendMessage(ctx, m.Chat.ID, a.messages["limit_today"], nil)
-		return
-	}
-	if len(settings.Topics) == 0 {
-		a.sendMessage(ctx, m.Chat.ID, a.messages["no_topics"], nil)
-		return
-	}
-	conv := &conversationState{Stage: stageGetLast24hCategory, Settings: settings}
-	conv.AvailableCats = make([]string, 0, len(settings.Topics))
-	for cat := range settings.Topics {
-		conv.AvailableCats = append(conv.AvailableCats, cat)
-	}
-	a.convs[m.Chat.ID] = conv
-	prompt := fmt.Sprintf(a.messages["prompt_choose_last24_cat"], formatOptions(conv.AvailableCats))
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addCancel(numberKeyboard(len(conv.AvailableCats))))
-	conv.LastMsgID = msgID
-}
-
-func (a *App) handleUpdateTopicsCommand(ctx context.Context, m *telegram.Message) {
-	log.Printf("user %d(@%s) called /update_topics", m.Chat.ID, m.Chat.Username)
-	tariff := a.cfg.Tariffs["base"]
-	settings, err := a.repo.Get(ctx, m.Chat.ID)
-	if err == nil {
-		if t, ok := a.cfg.Tariffs[settings.Tariff]; ok {
-			tariff = t
-		}
-	}
-	conv := &conversationState{UpdateTopics: true, CategoryLimit: tariff.Limits.CategoryLimit, InfoLimit: tariff.Limits.InfoTypeLimit, AllowCustomCategory: tariff.AllowCustomCategory}
-	if err == nil && len(settings.Topics) > 0 {
-		conv.Stage = stageUpdateChoice
-		conv.Topics = make(map[string][]string, len(settings.Topics))
-		for k, v := range settings.Topics {
-			conv.Topics[k] = append([]string(nil), v...)
-		}
-		a.convs[m.Chat.ID] = conv
-		msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_action"], addCancel(numberKeyboard(2)))
-		conv.LastMsgID = msgID
-		return
-	}
-	conv.Stage = stageCategory
-	a.convs[m.Chat.ID] = conv
-	prompt := fmt.Sprintf(a.messages["prompt_choose_category"], 1, formatOptions(a.categoryOptions))
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addCancel(numberKeyboard(len(a.categoryOptions))))
-	conv.LastMsgID = msgID
-}
-
-func (a *App) handleAddTopicCommand(ctx context.Context, m *telegram.Message) {
-	log.Printf("user %d(@%s) called /add_topic", m.Chat.ID, m.Chat.Username)
-	settings, err := a.repo.Get(ctx, m.Chat.ID)
-	if err != nil {
-		a.sendMessage(ctx, m.Chat.ID, a.messages["start_first"], nil)
-		return
-	}
-	tariff := a.cfg.Tariffs["base"]
-	if t, ok := a.cfg.Tariffs[settings.Tariff]; ok {
-		tariff = t
-	}
-	if len(settings.Topics) >= tariff.Limits.CategoryLimit {
-		a.sendMessage(ctx, m.Chat.ID, a.messages["limit_categories"], nil)
-		return
-	}
-	conv := &conversationState{
-		UpdateTopics:        true,
-		CategoryLimit:       tariff.Limits.CategoryLimit - len(settings.Topics),
-		InfoLimit:           tariff.Limits.InfoTypeLimit,
-		AllowCustomCategory: tariff.AllowCustomCategory,
-		Topics:              make(map[string][]string, len(settings.Topics)),
-	}
-	for k, v := range settings.Topics {
-		conv.Topics[k] = append([]string(nil), v...)
-	}
-	conv.Stage = stageCategory
-	a.convs[m.Chat.ID] = conv
-	prompt := fmt.Sprintf(a.messages["prompt_choose_category"], len(conv.Topics)+1, formatOptions(a.categoryOptions))
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, prompt, addCancel(numberKeyboard(len(a.categoryOptions))))
-	conv.LastMsgID = msgID
-}
-
-func (a *App) handleTopicsCommand(ctx context.Context, m *telegram.Message) {
-	log.Printf("user %d(@%s) called /topics", m.Chat.ID, m.Chat.Username)
-	//kb := [][]string{{"/update_topics"}, {"/add_topic"}, {"/delete_topics"}, {"/my_topics"}}
-	a.sendMessage(ctx, m.Chat.ID, a.messages["topics_menu"], nil)
-}
-
-func (a *App) handleDeleteTopicsCommand(ctx context.Context, m *telegram.Message) {
-	log.Printf("user %d(@%s) called /delete_topics", m.Chat.ID, m.Chat.Username)
-	settings, err := a.repo.Get(ctx, m.Chat.ID)
-	if err != nil {
-		a.sendMessage(ctx, m.Chat.ID, a.messages["start_first"], nil)
-		return
-	}
-	if len(settings.Topics) == 0 {
-		a.sendMessage(ctx, m.Chat.ID, a.messages["no_topics"], nil)
-		return
-	}
-	conv := &conversationState{UpdateTopics: true, DeleteTopics: true, Topics: make(map[string][]string, len(settings.Topics))}
-	for k, v := range settings.Topics {
-		conv.Topics[k] = append([]string(nil), v...)
-	}
-	conv.Stage = stageDeleteChoice
-	a.convs[m.Chat.ID] = conv
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, a.messages["choose_delete_action"], addCancel(numberKeyboard(2)))
-	conv.LastMsgID = msgID
-}
-
-func (a *App) handleMyTopicsCommand(ctx context.Context, m *telegram.Message) {
-	log.Printf("user %d(@%s) called /my_topics", m.Chat.ID, m.Chat.Username)
-	settings, err := a.repo.Get(ctx, m.Chat.ID)
-	if err != nil {
-		a.sendMessage(ctx, m.Chat.ID, a.messages["start_first"], nil)
-		return
-	}
-	parts := []string{}
-	for cat, types := range settings.Topics {
-		parts = append(parts, fmt.Sprintf("%s: %s", cat, strings.Join(types, ", ")))
-	}
-	msg := fmt.Sprintf(a.messages["your_topics"], strings.Join(parts, "\n\n"))
-	a.sendMessage(ctx, m.Chat.ID, msg, nil)
-}
-
-func (a *App) handleInfoCommand(ctx context.Context, m *telegram.Message) {
-	log.Printf("user %d(@%s) called /info", m.Chat.ID, m.Chat.Username)
-	a.sendLongMessage(ctx, m.Chat.ID, a.messages["info"])
-}
-
-func (a *App) handleTariffsCommand(ctx context.Context, m *telegram.Message) {
-	log.Printf("user %d(@%s) called /tariffs", m.Chat.ID, m.Chat.Username)
-	a.sendLongMessage(ctx, m.Chat.ID, a.messages["tariffs"])
-}
-
-func (a *App) handleSetTariffCommand(ctx context.Context, m *telegram.Message) {
-	if m.Chat.Username != "omilinov" {
-		return
-	}
-	conv := &conversationState{Stage: stageSetTariffUser}
-	a.convs[m.Chat.ID] = conv
-	msgID, _ := a.sendMessage(ctx, m.Chat.ID, "Введите username пользователя", nil)
-	conv.LastMsgID = msgID
 }

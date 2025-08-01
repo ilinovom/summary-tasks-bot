@@ -15,6 +15,7 @@ type PostgresUserSettingsRepository struct {
 	db *sql.DB
 }
 
+// NewPostgresUserSettingsRepository connects to Postgres and ensures the table exists.
 func NewPostgresUserSettingsRepository(connStr string) (*PostgresUserSettingsRepository, error) {
 	db, err := sql.Open("pgx", connStr)
 	if err != nil {
@@ -28,6 +29,7 @@ func NewPostgresUserSettingsRepository(connStr string) (*PostgresUserSettingsRep
 	return r, nil
 }
 
+// init creates the user_settings table if it does not yet exist.
 func (r *PostgresUserSettingsRepository) init() error {
 	_, err := r.db.Exec(`
         CREATE TABLE IF NOT EXISTS user_settings (
@@ -57,6 +59,7 @@ func (r *PostgresUserSettingsRepository) init() error {
 	return err
 }
 
+// Get retrieves a user's settings by ID.
 func (r *PostgresUserSettingsRepository) Get(ctx context.Context, userID int64) (*model.UserSettings, error) {
 	row := r.db.QueryRowContext(ctx, `SELECT user_id, username, active, info_types, categories, frequency, tariff, last_scheduled_sent, last_get_news_now, get_news_now_count, last_get_last_24h, get_last_24h_count FROM user_settings WHERE user_id=$1`, userID)
 	var s model.UserSettings
@@ -71,6 +74,7 @@ func (r *PostgresUserSettingsRepository) Get(ctx context.Context, userID int64) 
 	return &s, nil
 }
 
+// Save inserts or updates a user's settings.
 func (r *PostgresUserSettingsRepository) Save(ctx context.Context, settings *model.UserSettings) error {
 	topics, err := json.Marshal(settings.Topics)
 	if err != nil {
@@ -103,11 +107,13 @@ func (r *PostgresUserSettingsRepository) Save(ctx context.Context, settings *mod
 	return err
 }
 
+// Delete removes settings for a user.
 func (r *PostgresUserSettingsRepository) Delete(ctx context.Context, userID int64) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM user_settings WHERE user_id=$1`, userID)
 	return err
 }
 
+// List returns settings for all users.
 func (r *PostgresUserSettingsRepository) List(ctx context.Context) ([]*model.UserSettings, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT user_id, username, active, info_types, categories, frequency, tariff, last_scheduled_sent, last_get_news_now, get_news_now_count, last_get_last_24h, get_last_24h_count FROM user_settings`)
 	if err != nil {

@@ -10,16 +10,19 @@ import (
 	"github.com/ilinovom/summary-tasks-bot/internal/repository"
 )
 
+// memRepo is an in-memory implementation of UserSettingsRepository for tests.
 type memRepo struct {
 	data map[int64]*model.UserSettings
 }
 
 var _ repository.UserSettingsRepository = (*memRepo)(nil)
 
+// newMemRepo creates a fresh test repository.
 func newMemRepo() *memRepo {
 	return &memRepo{data: map[int64]*model.UserSettings{}}
 }
 
+// Get returns stored settings or os.ErrNotExist.
 func (m *memRepo) Get(ctx context.Context, userID int64) (*model.UserSettings, error) {
 	if s, ok := m.data[userID]; ok {
 		copy := *s
@@ -28,17 +31,20 @@ func (m *memRepo) Get(ctx context.Context, userID int64) (*model.UserSettings, e
 	return nil, os.ErrNotExist
 }
 
+// Save stores user settings.
 func (m *memRepo) Save(ctx context.Context, settings *model.UserSettings) error {
 	c := *settings
 	m.data[settings.UserID] = &c
 	return nil
 }
 
+// Delete removes settings for a user.
 func (m *memRepo) Delete(ctx context.Context, userID int64) error {
 	delete(m.data, userID)
 	return nil
 }
 
+// List returns a copy of all stored settings.
 func (m *memRepo) List(ctx context.Context) ([]*model.UserSettings, error) {
 	out := []*model.UserSettings{}
 	for _, s := range m.data {
@@ -48,6 +54,7 @@ func (m *memRepo) List(ctx context.Context) ([]*model.UserSettings, error) {
 	return out, nil
 }
 
+// TestUserService_StartStop verifies that Start and Stop toggle the Active flag.
 func TestUserService_StartStop(t *testing.T) {
 	repo := newMemRepo()
 	svc := NewUserService(repo, nil, nil)
@@ -69,6 +76,7 @@ func TestUserService_StartStop(t *testing.T) {
 	}
 }
 
+// TestUserService_GetByUsername_SetTariff checks user lookup and tariff updates.
 func TestUserService_GetByUsername_SetTariff(t *testing.T) {
 	repo := newMemRepo()
 	svc := NewUserService(repo, nil, map[string]config.Tariff{"base": {}, "plus": {}})

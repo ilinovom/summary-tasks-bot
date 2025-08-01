@@ -41,6 +41,7 @@ type BotCommand struct {
 	Description string `json:"description"`
 }
 
+// NewClient constructs a Telegram API client using the provided bot token.
 func NewClient(token string) *Client {
 	return &Client{
 		token:      token,
@@ -49,10 +50,12 @@ func NewClient(token string) *Client {
 	}
 }
 
+// url builds the absolute request URL for a given API method.
 func (c *Client) url(method string) string {
 	return c.baseURL + "/bot" + c.token + "/" + method
 }
 
+// SendMessage sends a text message with an optional custom keyboard.
 func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, keyboard [][]string) (int, error) {
 	body := map[string]any{
 		"chat_id":    chatID,
@@ -96,6 +99,7 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, key
 	return out.Result.MessageID, nil
 }
 
+// GetUpdates fetches updates starting from the given offset.
 func (c *Client) GetUpdates(ctx context.Context, offset int) ([]Update, error) {
 	q := url.Values{}
 	if offset != 0 {
@@ -151,6 +155,7 @@ func (c *Client) SetCommands(ctx context.Context, commands []BotCommand) error {
 	return nil
 }
 
+// DeleteMessage removes a previously sent message.
 func (c *Client) DeleteMessage(ctx context.Context, chatID int64, messageID int) error {
 	body := map[string]any{
 		"chat_id":    chatID,

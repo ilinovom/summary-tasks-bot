@@ -106,6 +106,7 @@ func FromEnv() (*Config, error) {
 	return c, nil
 }
 
+// loadOptions reads info and category options from disk.
 func (c *Config) loadOptions() error {
 	file, err := os.Open(c.OptionsFile)
 	if err != nil {
@@ -115,6 +116,7 @@ func (c *Config) loadOptions() error {
 	return json.NewDecoder(file).Decode(&c.Options)
 }
 
+// loadTariffs loads tariff definitions from the configured file.
 func (c *Config) loadTariffs() error {
 	file, err := os.Open(c.TariffFile)
 	if err != nil {
@@ -124,6 +126,7 @@ func (c *Config) loadTariffs() error {
 	return json.NewDecoder(file).Decode(&c.Tariffs)
 }
 
+// loadMessages parses bot reply templates from disk.
 func (c *Config) loadMessages() error {
 	file, err := os.Open(c.MessagesFile)
 	if err != nil {
