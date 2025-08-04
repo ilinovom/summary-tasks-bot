@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strings"
 )
 
 type Client struct {
@@ -137,7 +138,7 @@ func (c *Client) ChatResponses(ctx context.Context, model, prompt string, maxTok
 		return "", errors.New("openai: empty response")
 	}
 
-	return markdownToTelegramHTML(respBody.Output[1].Content[0].Text), nil
+	return markdownToTelegramHTML(removeDuplicateLines(respBody.Output[1].Content[0].Text)), nil
 }
 
 // markdownToTelegramHTML converts a subset of Markdown to HTML allowed by Telegram.
@@ -157,7 +158,43 @@ func markdownToTelegramHTML(input string) string {
 	reLink := regexp.MustCompile(`\[(.*?)\]\((.*?)\)`)
 	input = reLink.ReplaceAllString(input, `<a href="$2">$1</a>`)
 
-	return input
+	return removeUnclosedAnchor(input)
+}
+
+func removeUnclosedAnchor(text string) string {
+	lines := strings.Split(strings.TrimSpace(text), "\n")
+
+	if len(lines) == 0 {
+		return text
+	}
+
+	lastLine := lines[len(lines)-1]
+
+	// Проверяем наличие <a и отсутствие </a>
+	if strings.Contains(lastLine, "<a") && !strings.Contains(lastLine, "</a>") {
+		lines = lines[:len(lines)-1]
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func removeDuplicateLines(text string) string {
+	lines := strings.Split(strings.TrimSpace(text), "\n")
+	seen := make(map[string]bool)
+	var result []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue // пропускаем пустые строки
+		}
+		if !seen[trimmed] {
+			seen[trimmed] = true
+			result = append(result, line)
+		}
+	}
+
+	return strings.Join(result, "\n\n")
 }
 
 //// Разрешённые теги для Telegram
