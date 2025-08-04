@@ -6,6 +6,11 @@ import (
 	"strings"
 )
 
+type adminConversationParams struct {
+	TargetUser string
+	NewTariff  string
+}
+
 const adminUserName = "omilinov"
 
 // handleSetTariffCommand is an admin-only command that changes another user's tariff.
@@ -14,8 +19,9 @@ func (c *CmdHandler) handleSetTariffCommand(ctx context.Context, m *telegram.Mes
 		return
 	}
 	conv := &ConversationState{
-		Cmd:   SettCmd,
-		Stage: stageSetTariffUser,
+		Cmd:        SettCmd,
+		Stage:      stageSetTariffUser,
+		AdminConvP: &adminConversationParams{},
 	}
 
 	c.convs[m.Chat.ID] = conv
@@ -32,7 +38,7 @@ func (c *CmdHandler) continueSetTariffFlow(ctx context.Context, m *telegram.Mess
 			cs.LastMsgID = msg
 			return true
 		}
-		cs.TargetUser = username
+		cs.AdminConvP.TargetUser = username
 		tariffs := []string{"base", "plus", "premium", "ultimate"}
 		prompt := "Выберите тариф"
 		msgID, _ := c.sendMessage(ctx, m.Chat.ID, prompt, addBack([][]string{tariffs}))
@@ -46,10 +52,10 @@ func (c *CmdHandler) continueSetTariffFlow(ctx context.Context, m *telegram.Mess
 			cs.LastMsgID = msg
 			return true
 		}
-		cs.NewTariff = choice
-		c.deleteCurrentAndLastMsg(ctx, m.Chat.ID, m.MessageID)
+		cs.AdminConvP.NewTariff = choice
+		c.deleteCurrentAndLastMsg(ctx, m.Chat.ID, m.MessageID, cs.LastMsgID)
 
-		if err := c.setUserTariff(ctx, cs.TargetUser, cs.NewTariff); err != nil {
+		if err := c.setUserTariff(ctx, cs.AdminConvP.TargetUser, cs.AdminConvP.NewTariff); err != nil {
 			c.sendMessage(ctx, m.Chat.ID, "Ошибка: "+err.Error(), nil)
 		} else {
 			c.sendMessage(ctx, m.Chat.ID, "Тариф обновлен", nil)

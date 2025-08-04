@@ -61,9 +61,19 @@ func (c *CmdHandler) HandleMessages(ctx context.Context, m *telegram.Message) {
 		return
 	}
 
+	//TODO добавить сюда проверку есть ли юзер  кэше и если нет то посмотреть в базе
+	isNew, err := c.checkUser(ctx, m)
+	if err != nil {
+		log.Printf("user id %d (@%s) called %s but something happend: %v", m.Chat.ID, m.Chat.Username, m.Text, err)
+		return
+	}
+	if isNew {
+		m.Text = StartCmd
+	}
+
 	switch m.Text {
 	case StartCmd:
-		c.handleStartCommand(ctx, m)
+		c.handleStartCommand(ctx, m, isNew)
 	case StopCmd:
 		c.handleStopCommand(ctx, m)
 	case InfoCmd:
@@ -170,15 +180,11 @@ func (c *CmdHandler) saveTopics(ctx context.Context, m *telegram.Message, cs *Co
 		if err != nil && errors.Is(err, os.ErrNotExist) {
 			settings = &model.UserSettings{UserID: m.Chat.ID, UserName: m.Chat.Username}
 		}
-		settings.Topics = cs.Topics
+		settings.Topics = cs.TopicsConvP.Topics
 		if err := c.repo.Save(ctx, settings); err != nil {
 			log.Println("save settings:", err)
 		} else {
-			parts := []string{}
-			for cat, types := range cs.Topics {
-				parts = append(parts, fmt.Sprintf("%s: %s", cat, strings.Join(types, ", ")))
-			}
-			c.sendMessage(ctx, m.Chat.ID, fmt.Sprintf(c.messages["settings_updated"], strings.Join(parts, "\n")), nil)
+			c.sendMessage(ctx, m.Chat.ID, fmt.Sprintf(c.messages["settings_updated"], buildAlreadyChosenInfos(cs.TopicsConvP.Topics)), nil)
 		}
 		delete(c.convs, m.Chat.ID)
 		return
@@ -187,7 +193,7 @@ func (c *CmdHandler) saveTopics(ctx context.Context, m *telegram.Message, cs *Co
 	settings = &model.UserSettings{
 		UserID:            m.Chat.ID,
 		UserName:          m.Chat.Username,
-		Topics:            cs.Topics,
+		Topics:            cs.TopicsConvP.Topics,
 		Tariff:            "base",
 		LastScheduledSent: time.Now().Unix(),
 		LastGetNewsNow:    0,
@@ -200,7 +206,7 @@ func (c *CmdHandler) saveTopics(ctx context.Context, m *telegram.Message, cs *Co
 		log.Println("save settings:", err)
 	} else {
 		parts := []string{}
-		for cat, types := range cs.Topics {
+		for cat, types := range cs.TopicsConvP.Topics {
 			parts = append(parts, fmt.Sprintf("%s: %s", cat, strings.Join(types, ", ")))
 		}
 		c.sendMessage(ctx, m.Chat.ID, fmt.Sprintf(c.messages["settings_saved"], strings.Join(parts, "\n")), nil)
@@ -241,16 +247,103 @@ func (c *CmdHandler) SetCommands(ctx context.Context) {
 	}
 }
 
-func (c *CmdHandler) sendAnswerChooseInfo(ctx context.Context, m *telegram.Message, cs *ConversationState, kb [][]string) {
-	prompt := fmt.Sprintf(c.messages["prompt_choose_info"], cs.CurrentCat, cs.InfoLimit, formatOptions(c.infoOptions))
-	if len(cs.SelectedInfos) > 0 {
-		prompt += "\n\n" + fmt.Sprintf(c.messages["already_selected"], strings.Join(cs.SelectedInfos, ", "))
+func (c *CmdHandler) deleteCurrentAndLastMsg(ctx context.Context, chatId int64, curId, lastId int) {
+	c.deleteMessage(ctx, chatId, curId)
+	c.deleteMessage(ctx, chatId, lastId)
+}
+
+func (c *CmdHandler) sendAnswerChooseCategory(ctx context.Context, m *telegram.Message, cs *ConversationState, isRepeatedCat bool, kb [][]string) {
+	prompt := fmt.Sprintf(
+		c.messages["prompt_choose_category"],
+		cs.TopicsConvP.CategoryLimit,
+		formatOptions(addCustomOption(c.categoryOptions, cs.TopicsConvP.AllowCustomCategory)),
+	)
+
+	if len(cs.TopicsConvP.SelectedCats) > 0 {
+		prompt += "\n\n" + fmt.Sprintf(c.messages["already_selected"], strings.Join(cs.TopicsConvP.SelectedCats, ", "))
 	}
+
+	if isRepeatedCat {
+		prompt = c.messages["already_selected_err"] + prompt
+	}
+
 	msg, _ := c.sendMessage(ctx, m.Chat.ID, prompt, kb)
 	cs.LastMsgID = msg
 }
 
-func (c *CmdHandler) deleteCurrentAndLastMsg(ctx context.Context, curId int64, lastId int) {
-	c.deleteMessage(ctx, curId, lastId)
-	c.deleteMessage(ctx, curId, lastId)
+func (c *CmdHandler) sendAnswerChooseInfo(ctx context.Context, m *telegram.Message, cs *ConversationState, isRepeatedInfo bool, kb [][]string) {
+	prompt := fmt.Sprintf(
+		c.messages["prompt_choose_info"],
+		//strings.Join(cs.TopicsConvP.SelectedCats, ",\n\t\t"),
+		cs.TopicsConvP.CurrentCat,
+		cs.TopicsConvP.InfoLimit,
+		formatOptions(c.infoOptions),
+	)
+
+	prompt += fmt.Sprintf(c.messages["already_selected"], buildAlreadyChosenInfos(cs.TopicsConvP.Topics))
+
+	if isRepeatedInfo {
+		prompt = c.messages["already_selected_err"] + prompt
+	}
+
+	msg, _ := c.sendMessage(ctx, m.Chat.ID, prompt, kb)
+	cs.LastMsgID = msg
+}
+
+func (c *CmdHandler) sendDeleteChooseMultiCategory(ctx context.Context, m *telegram.Message, cs *ConversationState, kb [][]string) {
+	prompt := fmt.Sprintf(c.messages["prompt_choose_delete_multi"], formatOptions(getKeys(cs.TopicsConvP.Topics)))
+	if len(cs.TopicsConvP.SelectedCats) > 0 {
+		prompt += "\n\n" + fmt.Sprintf(c.messages["already_selected"], strings.Join(cs.TopicsConvP.SelectedCats, ", "))
+	}
+	msgID, _ := c.sendMessage(ctx, m.Chat.ID, prompt, kb)
+	cs.LastMsgID = msgID
+}
+
+func (c *CmdHandler) sendAnswerDeleteChooseCategory(ctx context.Context, m *telegram.Message, cs *ConversationState, isRepeatedCat bool, kb [][]string) {
+	prompt := fmt.Sprintf(
+		c.messages["prompt_choose_category"],
+		len(cs.TopicsConvP.Topics),
+		formatOptions(getKeys(cs.TopicsConvP.Topics)),
+	)
+
+	if len(cs.TopicsConvP.SelectedCats) > 0 {
+		prompt += "\n\n" + fmt.Sprintf(c.messages["already_selected"], strings.Join(cs.TopicsConvP.SelectedCats, ", "))
+	}
+
+	if isRepeatedCat {
+		prompt = c.messages["already_selected_err"] + prompt
+	}
+
+	msg, _ := c.sendMessage(ctx, m.Chat.ID, prompt, kb)
+	cs.LastMsgID = msg
+}
+
+func (c *CmdHandler) checkUser(ctx context.Context, m *telegram.Message) (bool, error) {
+	_, err := c.repo.Get(ctx, m.Chat.ID)
+	if err != nil {
+		if err.Error() != "not found" {
+			return false, fmt.Errorf("error when getting user from DB: %v", err)
+		}
+
+		err = c.repo.Save(ctx, &model.UserSettings{
+			UserID:            m.Chat.ID,
+			UserName:          m.Chat.Username,
+			Active:            true,
+			Topics:            make(map[string][]string),
+			Frequency:         0,
+			Tariff:            "base",
+			LastScheduledSent: 0,
+			LastGetNewsNow:    0,
+			GetNewsNowCount:   0,
+			LastGetLast24h:    0,
+			GetLast24hCount:   0,
+		})
+		if err != nil {
+			return false, fmt.Errorf("error when saving user: %v", err)
+		}
+
+		return true, nil
+	}
+
+	return false, nil
 }

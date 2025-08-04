@@ -3,11 +3,16 @@ package cmdHandlers
 import (
 	"context"
 	"fmt"
+	"github.com/ilinovom/summary-tasks-bot/internal/model"
 	"log"
 	"time"
 
 	"github.com/ilinovom/summary-tasks-bot/pkg/telegram"
 )
+
+type newsConvParams struct {
+	Settings *model.UserSettings // используется только в новостях. подумать чтоы убрать отсюда
+}
 
 // handleGetNewsNowCommand starts the flow for the /get_news_now command.
 // It asks the user to choose a category and records usage stats.
@@ -35,14 +40,25 @@ func (c *CmdHandler) handleGetNewsNowCommand(ctx context.Context, m *telegram.Me
 		c.sendMessage(ctx, m.Chat.ID, c.messages["no_topics"], nil)
 		return
 	}
-	conv := &ConversationState{Cmd: GetNewsNowCmd, Stage: StageGetNewsCategory, Settings: settings}
-	conv.AvailableCats = make([]string, 0, len(settings.Topics))
-	for cat := range settings.Topics {
-		conv.AvailableCats = append(conv.AvailableCats, cat)
+
+	conv := &ConversationState{
+		Cmd:   GetNewsNowCmd,
+		Stage: StageGetNewsCategory,
+		NewsConvP: &newsConvParams{
+			Settings: settings,
+		},
+		TopicsConvP: &topicsConvParams{
+			AvailableCats: make([]string, 0, len(settings.Topics)),
+		},
 	}
+
+	for cat := range settings.Topics {
+		conv.TopicsConvP.AvailableCats = append(conv.TopicsConvP.AvailableCats, cat)
+	}
+
 	c.convs[m.Chat.ID] = conv
-	prompt := fmt.Sprintf(c.messages["prompt_choose_news_cat"], formatOptions(conv.AvailableCats))
-	msgID, _ := c.sendMessage(ctx, m.Chat.ID, prompt, addCancel(numberKeyboard(len(conv.AvailableCats))))
+	prompt := fmt.Sprintf(c.messages["prompt_choose_news_cat"], formatOptions(conv.TopicsConvP.AvailableCats))
+	msgID, _ := c.sendMessage(ctx, m.Chat.ID, prompt, addCancel(numberKeyboard(len(conv.TopicsConvP.AvailableCats))))
 	conv.LastMsgID = msgID
 }
 
@@ -50,34 +66,34 @@ func (c *CmdHandler) continueNewsFlow(ctx context.Context, m *telegram.Message, 
 	if cs.Stage != StageGetNewsCategory {
 		return false
 	}
-	cats := parseSelection(m.Text, cs.AvailableCats, 1)
+	cats := parseSelection(m.Text, cs.TopicsConvP.AvailableCats, 1)
 	if len(cats) == 0 {
-		msg, _ := c.sendMessage(ctx, m.Chat.ID, c.messages["choose_category_number"], addCancel(numberKeyboard(len(cs.AvailableCats))))
+		msg, _ := c.sendMessage(ctx, m.Chat.ID, c.messages["choose_category_number"], addCancel(numberKeyboard(len(cs.TopicsConvP.AvailableCats))))
 		cs.LastMsgID = msg
 		return true
 	}
-	c.deleteCurrentAndLastMsg(ctx, m.Chat.ID, m.MessageID)
+	c.deleteCurrentAndLastMsg(ctx, m.Chat.ID, m.MessageID, cs.LastMsgID)
 
-	tariff, ok := c.cfg.Tariffs[cs.Settings.Tariff]
+	tariff, ok := c.cfg.Tariffs[cs.NewsConvP.Settings.Tariff]
 	if !ok {
 		tariff = c.cfg.Tariffs["base"]
 	}
 	now := time.Now()
-	last := time.Unix(cs.Settings.LastGetNewsNow, 0)
+	last := time.Unix(cs.NewsConvP.Settings.LastGetNewsNow, 0)
 	if now.YearDay() != last.YearDay() || now.Year() != last.Year() {
-		cs.Settings.GetNewsNowCount = 0
+		cs.NewsConvP.Settings.GetNewsNowCount = 0
 	}
-	if cs.Settings.GetNewsNowCount >= tariff.Limits.GetNewsNowPerDay {
+	if cs.NewsConvP.Settings.GetNewsNowCount >= tariff.Limits.GetNewsNowPerDay {
 		c.sendMessage(ctx, m.Chat.ID, c.messages["limit_today"], nil)
 		delete(c.convs, m.Chat.ID)
 		return true
 	}
-	cs.Settings.GetNewsNowCount++
-	cs.Settings.LastGetNewsNow = now.Unix()
-	if err := c.repo.Save(ctx, cs.Settings); err != nil {
+	cs.NewsConvP.Settings.GetNewsNowCount++
+	cs.NewsConvP.Settings.LastGetNewsNow = now.Unix()
+	if err := c.repo.Save(ctx, cs.NewsConvP.Settings); err != nil {
 		log.Println("save settings:", err)
 	}
-	msg, err := c.userService.GetNewsForCategoryMultiInfo(ctx, cs.Settings, cats[0])
+	msg, err := c.userService.GetNewsForCategoryMultiInfo(ctx, cs.NewsConvP.Settings, cats[0])
 	if err != nil {
 		log.Println("get news:", err)
 		delete(c.convs, m.Chat.ID)
@@ -123,14 +139,23 @@ func (c *CmdHandler) handleGetLast24hNewsCommand(ctx context.Context, m *telegra
 		c.sendMessage(ctx, m.Chat.ID, c.messages["no_topics"], nil)
 		return
 	}
-	conv := &ConversationState{Cmd: GetLast24hNewsCmd, Stage: stageGetLast24hCategory, Settings: settings}
-	conv.AvailableCats = make([]string, 0, len(settings.Topics))
+	conv := &ConversationState{
+		Cmd:   GetLast24hNewsCmd,
+		Stage: stageGetLast24hCategory,
+		NewsConvP: &newsConvParams{
+			Settings: settings,
+		},
+		TopicsConvP: &topicsConvParams{
+			AvailableCats: make([]string, 0, len(settings.Topics)),
+		},
+	}
+
 	for cat := range settings.Topics {
-		conv.AvailableCats = append(conv.AvailableCats, cat)
+		conv.TopicsConvP.AvailableCats = append(conv.TopicsConvP.AvailableCats, cat)
 	}
 	c.convs[m.Chat.ID] = conv
-	prompt := fmt.Sprintf(c.messages["prompt_choose_last24_cat"], formatOptions(conv.AvailableCats))
-	msgID, _ := c.sendMessage(ctx, m.Chat.ID, prompt, addCancel(numberKeyboard(len(conv.AvailableCats))))
+	prompt := fmt.Sprintf(c.messages["prompt_choose_last24_cat"], formatOptions(conv.TopicsConvP.AvailableCats))
+	msgID, _ := c.sendMessage(ctx, m.Chat.ID, prompt, addCancel(numberKeyboard(len(conv.TopicsConvP.AvailableCats))))
 	conv.LastMsgID = msgID
 }
 
@@ -138,25 +163,25 @@ func (c *CmdHandler) continueLast24hFlow(ctx context.Context, m *telegram.Messag
 	if cs.Stage != stageGetLast24hCategory {
 		return false
 	}
-	cats := parseSelection(m.Text, cs.AvailableCats, 1)
+	cats := parseSelection(m.Text, cs.TopicsConvP.AvailableCats, 1)
 	if len(cats) == 0 {
-		msg, _ := c.sendMessage(ctx, m.Chat.ID, c.messages["choose_category_number"], addCancel(numberKeyboard(len(cs.AvailableCats))))
+		msg, _ := c.sendMessage(ctx, m.Chat.ID, c.messages["choose_category_number"], addCancel(numberKeyboard(len(cs.TopicsConvP.AvailableCats))))
 		cs.LastMsgID = msg
 		return true
 	}
 
-	c.deleteCurrentAndLastMsg(ctx, m.Chat.ID, m.MessageID)
+	c.deleteCurrentAndLastMsg(ctx, m.Chat.ID, m.MessageID, cs.LastMsgID)
 
-	tariff, ok := c.cfg.Tariffs[cs.Settings.Tariff]
+	tariff, ok := c.cfg.Tariffs[cs.NewsConvP.Settings.Tariff]
 	if !ok {
 		tariff = c.cfg.Tariffs["base"]
 	}
 	now := time.Now()
-	last := time.Unix(cs.Settings.LastGetLast24h, 0)
+	last := time.Unix(cs.NewsConvP.Settings.LastGetLast24h, 0)
 	if now.YearDay() != last.YearDay() || now.Year() != last.Year() {
-		cs.Settings.GetLast24hCount = 0
+		cs.NewsConvP.Settings.GetLast24hCount = 0
 	}
-	if cs.Settings.GetLast24hCount >= tariff.Limits.GetLast24hNewPerDay {
+	if cs.NewsConvP.Settings.GetLast24hCount >= tariff.Limits.GetLast24hNewPerDay {
 		c.sendMessage(ctx, m.Chat.ID, c.messages["limit_today"], nil)
 		delete(c.convs, m.Chat.ID)
 		return true
@@ -164,7 +189,7 @@ func (c *CmdHandler) continueLast24hFlow(ctx context.Context, m *telegram.Messag
 
 	msgWait, _ := c.sendMessage(ctx, m.Chat.ID, c.messages["wait_search"], nil)
 
-	msg, err := c.userService.GetLast24hNewsForCategory(ctx, cs.Settings, cats[0])
+	msg, err := c.userService.GetLast24hNewsForCategory(ctx, cs.NewsConvP.Settings, cats[0])
 	if err != nil {
 		log.Println("get news:", err)
 		delete(c.convs, m.Chat.ID)
@@ -172,9 +197,9 @@ func (c *CmdHandler) continueLast24hFlow(ctx context.Context, m *telegram.Messag
 	}
 
 	c.deleteMessage(ctx, m.Chat.ID, msgWait)
-	cs.Settings.GetLast24hCount++
-	cs.Settings.LastGetLast24h = now.Unix()
-	if err := c.repo.Save(ctx, cs.Settings); err != nil {
+	cs.NewsConvP.Settings.GetLast24hCount++
+	cs.NewsConvP.Settings.LastGetLast24h = now.Unix()
+	if err := c.repo.Save(ctx, cs.NewsConvP.Settings); err != nil {
 		log.Println("save settings:", err)
 	}
 	if len([]rune(msg)) > 4096 {

@@ -2,8 +2,16 @@ package cmdHandlers
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
+)
+
+const (
+	DoneButton = "Готово"
+
+	DeleteEverything = "Удалить все"
+	DeleteSome       = "Удалить несколько"
 )
 
 // formatOptions turns the list of options into numbered lines suitable for a
@@ -46,6 +54,16 @@ func parseSelection(text string, opts []string, limit int) []string {
 		}
 	}
 	return out
+}
+
+// parseSelection parse answer from keyboard
+func parseSelectionOne(text string, opts []string) string {
+	idx, err := strconv.Atoi(text)
+	if err != nil || idx < 1 || idx > len(opts) {
+		return ""
+	}
+
+	return opts[idx-1]
 }
 
 // numberKeyboard builds a keyboard with numeric buttons from 1 to n.
@@ -98,17 +116,54 @@ func addBackDone(kb [][]string) [][]string {
 	return append(kb, []string{"Назад", "Готово"})
 }
 
-func addInfosInfoSelected(infos []string, cs *ConversationState) {
+func addSelectedInfo(infos []string, cs *ConversationState) {
 	for _, inf := range infos {
 		found := false
-		for _, ex := range cs.SelectedInfos {
+		for _, ex := range cs.TopicsConvP.SelectedInfos {
 			if ex == inf {
 				found = true
 				break
 			}
 		}
-		if !found && len(cs.SelectedInfos) < cs.InfoLimit {
-			cs.SelectedInfos = append(cs.SelectedInfos, inf)
+		if !found && len(cs.TopicsConvP.SelectedInfos) < cs.TopicsConvP.InfoLimit {
+			cs.TopicsConvP.SelectedInfos = append(cs.TopicsConvP.SelectedInfos, inf)
 		}
 	}
+}
+
+func buildAlreadyChosenInfos(topics map[string][]string) string {
+	keys := make([]string, 0, len(topics))
+	for k := range topics {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	b := strings.Builder{}
+	for _, cat := range keys {
+		infos := topics[cat]
+		if len(infos) == 0 {
+			b.WriteString(cat + ": [ ]\n\t")
+			continue
+		}
+		b.WriteString(cat + ": [<u>")
+
+		for i, info := range infos {
+			if i == len(infos)-1 {
+				b.WriteString(info)
+				continue
+			}
+			b.WriteString(info + ", ")
+		}
+		b.WriteString("</u>]\n\t")
+	}
+	return b.String()
+}
+
+func getKeys(mapa map[string][]string) []string {
+	keys := make([]string, 0, len(mapa))
+	for k := range mapa {
+		keys = append(keys, k)
+	}
+	return keys
 }

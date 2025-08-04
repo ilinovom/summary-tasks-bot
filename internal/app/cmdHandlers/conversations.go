@@ -2,7 +2,6 @@ package cmdHandlers
 
 import (
 	"context"
-	"github.com/ilinovom/summary-tasks-bot/internal/model"
 	"github.com/ilinovom/summary-tasks-bot/pkg/telegram"
 	"strings"
 )
@@ -43,23 +42,15 @@ const (
 )
 
 type ConversationState struct {
-	Cmd                 string
-	Stage               convStage
-	PrevStage           convStage
-	Step                int
-	CurrentCat          string
-	OldCat              string
-	Topics              map[string][]string
-	CategoryLimit       int
-	InfoLimit           int
-	LastMsgID           int
-	AvailableCats       []string
-	Settings            *model.UserSettings
-	AllowCustomCategory bool
-	SelectedInfos       []string
-	SelectedCats        []string
-	TargetUser          string
-	NewTariff           string
+	Cmd string // это название команды в рамках которого продолжается диалог
+
+	Stage     convStage // это шаг продолжение диалога в рамках cmd
+	PrevStage convStage // это предыдущий шаг диалога в рамках cmd
+	LastMsgID int       // здесь хранится id предыдущего сообщения, чтобы его удалить
+
+	NewsConvP   *newsConvParams
+	TopicsConvP *topicsConvParams
+	AdminConvP  *adminConversationParams // параметры нужны для диалога в рамках команд для админа
 }
 
 // setStage updates the conversation state and remembers the previous stage to
@@ -81,15 +72,15 @@ func (cs *ConversationState) back() {
 // and advances the conversation state machine accordingly.
 func (c *CmdHandler) continueConversation(ctx context.Context, m *telegram.Message, cs *ConversationState) {
 	if strings.EqualFold(m.Text, "Отмена") {
-		c.deleteCurrentAndLastMsg(ctx, m.Chat.ID, m.MessageID)
+		c.deleteCurrentAndLastMsg(ctx, m.Chat.ID, m.MessageID, cs.LastMsgID)
 		c.sendMessage(ctx, m.Chat.ID, c.messages["cancelled"], nil)
 		delete(c.convs, m.Chat.ID)
 		return
 	}
 
 	switch cs.Cmd {
-	case StartCmd:
-		c.continueStartFlow(ctx, m, cs)
+	//case StartCmd:
+	//	c.continueStartFlow(ctx, m, cs)
 	case UpdateTopicsCmd:
 		c.continueUpdateFlow(ctx, m, cs)
 	case AddTopicsCmd:
