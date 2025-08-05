@@ -11,7 +11,12 @@ const (
 	DoneButton = "Готово"
 
 	DeleteEverything = "Удалить все"
-	DeleteSome       = "Удалить несколько"
+	DeleteSome       = "Удалить 1 и более"
+
+	UpdateEverything = "Обновить все"
+	UpdateSome       = "Обновить 1 и более"
+
+	CustomCatName = "😇Своя категория"
 )
 
 // formatOptions turns the list of options into numbered lines suitable for a
@@ -165,5 +170,36 @@ func getKeys(mapa map[string][]string) []string {
 	for k := range mapa {
 		keys = append(keys, k)
 	}
+
+	sort.Strings(keys)
 	return keys
+}
+
+func deleteKeysFromMap(mapa map[string][]string, dkeys []string) {
+	for _, dk := range dkeys {
+		if _, isExist := mapa[dk]; isExist {
+			delete(mapa, dk)
+		}
+	}
+}
+
+func getNextCustomCat(cats []string, number int) string {
+	for _, cat := range cats {
+		if strings.Contains(cat, CustomCatName) && strings.HasSuffix(cat, "_"+strconv.Itoa(number)) {
+			return cat
+		}
+	}
+
+	return ""
+}
+
+// removeWithSubstring удаляет все элементы, которые содержат подстроку "бла"
+func removeCustomCats(slice []string) []string {
+	result := make([]string, 0, len(slice))
+	for _, v := range slice {
+		if !strings.Contains(v, CustomCatName) {
+			result = append(result, v)
+		}
+	}
+	return result
 }

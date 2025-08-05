@@ -12,7 +12,6 @@ import (
 	"log"
 	"os"
 	"strings"
-	"time"
 )
 
 const (
@@ -170,58 +169,21 @@ func (с *CmdHandler) setUserTariff(ctx context.Context, username, tariff string
 func (c *CmdHandler) saveTopics(ctx context.Context, m *telegram.Message, cs *ConversationState) {
 	var settings *model.UserSettings
 	var err error
-	if cs.Cmd == UpdateTopicsCmd || cs.Cmd == AddTopicsCmd {
-		settings, err = c.repo.Get(ctx, m.Chat.ID)
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			log.Println("save settings:", err)
-			delete(c.convs, m.Chat.ID)
-			return
-		}
-		if err != nil && errors.Is(err, os.ErrNotExist) {
-			settings = &model.UserSettings{UserID: m.Chat.ID, UserName: m.Chat.Username}
-		}
-		settings.Topics = cs.TopicsConvP.Topics
-		if err := c.repo.Save(ctx, settings); err != nil {
-			log.Println("save settings:", err)
-		} else {
-			c.sendMessage(ctx, m.Chat.ID, fmt.Sprintf(c.messages["settings_updated"], buildAlreadyChosenInfos(cs.TopicsConvP.Topics)), nil)
-		}
+
+	settings, err = c.repo.Get(ctx, m.Chat.ID)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		log.Println("save settings:", err)
 		delete(c.convs, m.Chat.ID)
 		return
 	}
-
-	settings = &model.UserSettings{
-		UserID:            m.Chat.ID,
-		UserName:          m.Chat.Username,
-		Topics:            cs.TopicsConvP.Topics,
-		Tariff:            "base",
-		LastScheduledSent: time.Now().Unix(),
-		LastGetNewsNow:    0,
-		GetNewsNowCount:   0,
-		LastGetLast24h:    0,
-		GetLast24hCount:   0,
-		Active:            true,
+	if err != nil && errors.Is(err, os.ErrNotExist) {
+		settings = &model.UserSettings{UserID: m.Chat.ID, UserName: m.Chat.Username}
 	}
+	settings.Topics = cs.TopicsConvP.Topics
 	if err := c.repo.Save(ctx, settings); err != nil {
 		log.Println("save settings:", err)
 	} else {
-		parts := []string{}
-		for cat, types := range cs.TopicsConvP.Topics {
-			parts = append(parts, fmt.Sprintf("%s: %s", cat, strings.Join(types, ", ")))
-		}
-		c.sendMessage(ctx, m.Chat.ID, fmt.Sprintf(c.messages["settings_saved"], strings.Join(parts, "\n")), nil)
-		msg, err := c.userService.GetNewsMultiInfo(ctx, settings)
-		if err == nil {
-			if len([]rune(msg)) > 4096 {
-				if err := c.sendLongMessage(ctx, m.Chat.ID, msg); err != nil {
-					log.Println("send msg err: ", err)
-				}
-			} else {
-				c.sendMessage(ctx, m.Chat.ID, msg, nil)
-			}
-		} else {
-			log.Println("get news:", err)
-		}
+		c.sendMessage(ctx, m.Chat.ID, fmt.Sprintf(c.messages["settings_updated"], buildAlreadyChosenInfos(cs.TopicsConvP.Topics)), nil)
 	}
 	delete(c.convs, m.Chat.ID)
 }
@@ -316,6 +278,20 @@ func (c *CmdHandler) sendAnswerDeleteChooseCategory(ctx context.Context, m *tele
 
 	msg, _ := c.sendMessage(ctx, m.Chat.ID, prompt, kb)
 	cs.LastMsgID = msg
+}
+
+func (c *CmdHandler) sendAnswerChooseExistingMulti(ctx context.Context, m *telegram.Message, cs *ConversationState, isRepeatedCat bool, kb [][]string) {
+	prompt := fmt.Sprintf(c.messages["prompt_choose_existing_multi"], formatOptions(getKeys(cs.TopicsConvP.Topics)))
+	if len(cs.TopicsConvP.ToUpdateCats) > 0 {
+		prompt += "\n\n" + fmt.Sprintf(c.messages["already_selected"], strings.Join(cs.TopicsConvP.ToUpdateCats, ", "))
+	}
+
+	if isRepeatedCat {
+		prompt = c.messages["already_selected_err"] + prompt
+	}
+
+	msgID, _ := c.sendMessage(ctx, m.Chat.ID, prompt, kb)
+	cs.LastMsgID = msgID
 }
 
 func (c *CmdHandler) checkUser(ctx context.Context, m *telegram.Message) (bool, error) {

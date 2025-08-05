@@ -11,13 +11,16 @@ import (
 type topicsConvParams struct {
 	Topics map[string][]string // здесь хранится категория в ключе и типы информации в значении, которые выбрал юзер
 
-	CategoryLimit       int      // здесь хранится всего категорий, которые доступны для выбора пользователем в рамках выполняемой команды
-	CatStep             int      // показывает какую категорию по счёту пользователь добавляет
-	CurrentCat          string   // это переменная хранит значений выбранной категории stage add/update_topics
-	OldCat              string   // здесь сохраняется категория которую мы будем обновлять в рамках /update_topics
-	AvailableCats       []string //TODO разобраться что это? и зачем?
-	SelectedCats        []string // выбранные категории
-	AllowCustomCategory bool     // разрешена ли кастомная категории (тариф != base)
+	CategoryLimit int      // здесь хранится всего категорий, которые доступны для выбора пользователем в рамках выполняемой команды
+	CatStep       int      // показывает какую категорию по счёту пользователь добавляет
+	CurrentCat    string   // это переменная хранит значений выбранной категории stage add/update_topics
+	OldCat        string   // здесь сохраняется категория которую мы будем обновлять в рамках /update_topics
+	AvailableCats []string //TODO перевести news на использование других и удалить
+	ToUpdateCats  []string
+	SelectedCats  []string // выбранные категории
+
+	CustomCatCount      int
+	AllowCustomCategory bool // разрешена ли кастомная категории (тариф != base)
 
 	InfoLimit     int      // здесь хранится всего типов информации, которые доступны для выбора пользователем для 1 категории
 	InfoStep      int      // показывает какую категорию по счёту пользователь добавляет
@@ -123,8 +126,9 @@ func (c *CmdHandler) handleAddTopicCommand(ctx context.Context, m *telegram.Mess
 	}
 
 	c.convs[m.Chat.ID] = conv
+	opts := addCustomOption(c.categoryOptions, conv.TopicsConvP.AllowCustomCategory)
 
-	c.sendAnswerChooseCategory(ctx, m, conv, false, addCancel(numberKeyboard(len(c.categoryOptions))))
+	c.sendAnswerChooseCategory(ctx, m, conv, false, addCancel(numberKeyboard(len(opts))))
 }
 
 func (c *CmdHandler) continueAddFlow(ctx context.Context, m *telegram.Message, cs *ConversationState) {
@@ -150,15 +154,35 @@ func (c *CmdHandler) handleStageAddTopicsCustomCategory(ctx context.Context, m *
 	}
 	c.deleteCurrentAndLastMsg(ctx, m.Chat.ID, m.MessageID, cs.LastMsgID)
 
-	cs.TopicsConvP.CurrentCat = "🫆" + strings.Join(words, " ")
-	c.goToInfoTypesStage(ctx, m, cs, addBackDone(numberKeyboard(len(c.infoOptions))))
+	newCatName := "🫆" + strings.Join(words, " ")
+	cs.TopicsConvP.Topics[newCatName] = nil
+	cs.TopicsConvP.SelectedCats = append(cs.TopicsConvP.SelectedCats, newCatName)
+	cs.TopicsConvP.CustomCatCount--
+
+	if cs.TopicsConvP.CustomCatCount > 0 {
+		msgID, _ := c.sendMessage(ctx, m.Chat.ID, fmt.Sprintf(c.messages["enter_custom_category"], getNextCustomCat(cs.TopicsConvP.SelectedCats, cs.TopicsConvP.CustomCatCount)), nil)
+		cs.LastMsgID = msgID
+		return
+	}
+
+	cs.TopicsConvP.SelectedCats = removeCustomCats(cs.TopicsConvP.SelectedCats)
+	cs.TopicsConvP.setNextCat()
+	cs.TopicsConvP.CategoryLimit = cs.TopicsConvP.CategoryLimit - len(cs.TopicsConvP.SelectedCats)
+	c.goToAddTopicsInfoTypesStage(ctx, m, cs, addCancel(numberKeyboard(len(c.infoOptions))))
 }
 
 func (c *CmdHandler) handleStageAddTopicsCategory(ctx context.Context, m *telegram.Message, cs *ConversationState) {
+	c.deleteCurrentAndLastMsg(ctx, m.Chat.ID, m.MessageID, cs.LastMsgID)
+
 	if strings.EqualFold(m.Text, DoneButton) {
 		if len(cs.TopicsConvP.SelectedCats) != 0 {
-			c.deleteCurrentAndLastMsg(ctx, m.Chat.ID, m.MessageID, cs.LastMsgID)
-			c.goToInfoTypesStage(ctx, m, cs, addCancel(numberKeyboard(len(c.infoOptions))))
+			if cs.checkCustomCategory() {
+				cs.setStage(StageAddTopicsCustomCategory)
+				msgID, _ := c.sendMessage(ctx, m.Chat.ID, fmt.Sprintf(c.messages["enter_custom_category"], getNextCustomCat(cs.TopicsConvP.SelectedCats, cs.TopicsConvP.CustomCatCount)), nil)
+				cs.LastMsgID = msgID
+				return
+			}
+			c.goToAddTopicsInfoTypesStage(ctx, m, cs, addCancel(numberKeyboard(len(c.infoOptions))))
 			return
 		}
 	}
@@ -166,7 +190,6 @@ func (c *CmdHandler) handleStageAddTopicsCategory(ctx context.Context, m *telegr
 	// получаем все доступные пользователю категории
 	opts := addCustomOption(c.categoryOptions, cs.TopicsConvP.AllowCustomCategory)
 	selectedCat := parseSelectionOne(m.Text, opts)
-	c.deleteCurrentAndLastMsg(ctx, m.Chat.ID, m.MessageID, cs.LastMsgID)
 
 	// если пользователь выбрал категорию, то добавляем категории в список и увеличиваем шаг
 	if selectedCat == "" {
@@ -174,12 +197,19 @@ func (c *CmdHandler) handleStageAddTopicsCategory(ctx context.Context, m *telegr
 		return
 	}
 
+	if cs.TopicsConvP.AllowCustomCategory && selectedCat == CustomCatName {
+		cs.TopicsConvP.CustomCatCount++
+		selectedCat = fmt.Sprintf("%s_%d", selectedCat, cs.TopicsConvP.CustomCatCount)
+	}
+
 	if !cs.TopicsConvP.addSelectedCats(selectedCat) {
 		c.sendAnswerChooseCategory(ctx, m, cs, true, addCancelDone(numberKeyboard(len(opts))))
 		return
 	}
 
-	cs.TopicsConvP.Topics[selectedCat] = nil
+	if !strings.Contains(selectedCat, CustomCatName) {
+		cs.TopicsConvP.Topics[selectedCat] = nil
+	}
 
 	// предлагаем добавлять категории, пока не исчерпан лимит
 	if len(cs.TopicsConvP.SelectedCats) < cs.TopicsConvP.CategoryLimit {
@@ -187,16 +217,19 @@ func (c *CmdHandler) handleStageAddTopicsCategory(ctx context.Context, m *telegr
 		return
 	}
 
-	if cs.TopicsConvP.AllowCustomCategory && selectedCat == "😇Своя категория" {
+	if cs.checkCustomCategory() {
 		cs.setStage(StageAddTopicsCustomCategory)
-		msgID, _ := c.sendMessage(ctx, m.Chat.ID, c.messages["enter_custom_category"], nil)
+		msgID, _ := c.sendMessage(ctx, m.Chat.ID, fmt.Sprintf(c.messages["enter_custom_category"], getNextCustomCat(cs.TopicsConvP.SelectedCats, cs.TopicsConvP.CustomCatCount)), nil)
 		cs.LastMsgID = msgID
+		return
 	}
 
-	c.goToInfoTypesStage(ctx, m, cs, addCancel(numberKeyboard(len(c.infoOptions))))
+	c.goToAddTopicsInfoTypesStage(ctx, m, cs, addCancel(numberKeyboard(len(c.infoOptions))))
 }
 
 func (c *CmdHandler) handleStageAddTopicsInfoTypes(ctx context.Context, m *telegram.Message, cs *ConversationState) {
+	c.deleteCurrentAndLastMsg(ctx, m.Chat.ID, m.MessageID, cs.LastMsgID)
+
 	if strings.EqualFold(m.Text, DoneButton) {
 		cs.TopicsConvP.decreaseCatStep()
 		cs.TopicsConvP.Topics[cs.TopicsConvP.CurrentCat] = cs.TopicsConvP.SelectedInfos
@@ -212,7 +245,6 @@ func (c *CmdHandler) handleStageAddTopicsInfoTypes(ctx context.Context, m *teleg
 	}
 
 	info := parseSelectionOne(m.Text, c.infoOptions)
-	c.deleteCurrentAndLastMsg(ctx, m.Chat.ID, m.MessageID, cs.LastMsgID)
 
 	if info == "" {
 		c.sendAnswerChooseInfo(ctx, m, cs, false, addCancel(numberKeyboard(len(c.infoOptions))))
@@ -254,41 +286,7 @@ func (c *CmdHandler) handleStageAddTopicsInfoTypes(ctx context.Context, m *teleg
 	}*/
 }
 
-func (c *CmdHandler) handleStageAddTopicsAddMore(ctx context.Context, m *telegram.Message, cs *ConversationState) {
-	choice := parseSelection(m.Text, []string{"Да", "Нет"}, 1)
-	if len(choice) == 0 {
-		msg, _ := c.sendMessage(ctx, m.Chat.ID, c.messages["choose_action"], addCancel(numberKeyboard(2)))
-		cs.LastMsgID = msg
-	}
-	c.deleteCurrentAndLastMsg(ctx, m.Chat.ID, m.MessageID, cs.LastMsgID)
-
-	if choice[0] == "Нет" {
-		c.saveTopics(ctx, m, cs)
-		return
-	}
-
-	cs.TopicsConvP.AvailableCats = make([]string, 0, len(cs.TopicsConvP.Topics))
-	for cat := range cs.TopicsConvP.Topics {
-		cs.TopicsConvP.AvailableCats = append(cs.TopicsConvP.AvailableCats, cat)
-	}
-	cs.setStage(StageUpdateTopicsSelectManyExisting)
-	prompt := fmt.Sprintf(c.messages["prompt_choose_existing_multi"], formatOptions(cs.TopicsConvP.AvailableCats))
-	if len(cs.TopicsConvP.SelectedCats) > 0 {
-		prompt += "\n\n" + fmt.Sprintf(c.messages["already_selected"], strings.Join(cs.TopicsConvP.SelectedCats, ", "))
-	}
-	msgID, _ := c.sendMessage(ctx, m.Chat.ID, prompt, addCancel(numberKeyboard(len(cs.TopicsConvP.AvailableCats))))
-	cs.LastMsgID = msgID
-
-	//cs.Topics = map[string][]string{}
-	//cs.CatStep = 1
-	//cs.setStage(StageUpdateTopicsCategory)
-	//opts := addCustomOption(c.categoryOptions, cs.AllowCustomCategory)
-	//prompt := fmt.Sprintf(c.messages["prompt_choose_category"], 1, formatOptions(opts))
-	//msgID, _ := c.sendMessage(ctx, m.Chat.ID, prompt, addCancel(numberKeyboard(len(opts))))
-	//cs.LastMsgID = msgID
-}
-
-func (c *CmdHandler) goToInfoTypesStage(ctx context.Context, m *telegram.Message, cs *ConversationState, kb [][]string) {
+func (c *CmdHandler) goToAddTopicsInfoTypesStage(ctx context.Context, m *telegram.Message, cs *ConversationState, kb [][]string) {
 	cs.setStage(StageAddTopicsInfoTypes)
 	cs.TopicsConvP.setNextCat()
 

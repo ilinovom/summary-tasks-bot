@@ -68,6 +68,16 @@ func (cs *ConversationState) back() {
 	}
 }
 
+func (cs *ConversationState) checkCustomCategory() bool {
+	for _, cat := range cs.TopicsConvP.SelectedCats {
+		if cs.TopicsConvP.AllowCustomCategory && strings.Contains(cat, CustomCatName) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // continueConversation processes messages that are part of a multi-step dialog
 // and advances the conversation state machine accordingly.
 func (c *CmdHandler) continueConversation(ctx context.Context, m *telegram.Message, cs *ConversationState) {
