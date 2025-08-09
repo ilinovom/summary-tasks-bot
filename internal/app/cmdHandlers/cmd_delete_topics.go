@@ -2,6 +2,7 @@ package cmdHandlers
 
 import (
 	"context"
+	"github.com/ilinovom/summary-tasks-bot/internal/utils"
 	"github.com/ilinovom/summary-tasks-bot/pkg/telegram"
 	"log"
 	"strings"
@@ -103,7 +104,7 @@ func (c *CmdHandler) handleStageDeleteTopicsSelect(ctx context.Context, m *teleg
 		return
 	}
 
-	selectedCat := parseSelectionOne(m.Text, getKeys(cs.TopicsConvP.Topics))
+	selectedCat := parseSelectionOne(m.Text, utils.GetSortedKeys(cs.TopicsConvP.Topics))
 	if selectedCat == "" {
 		c.sendAnswerDeleteChooseCategory(ctx, m, cs, false, addCancelDone(numberKeyboard(len(cs.TopicsConvP.Topics))))
 		return

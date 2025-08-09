@@ -149,8 +149,7 @@ func (c *CmdHandler) handleStageAddTopicsCustomCategory(ctx context.Context, m *
 		cs.LastMsgID = msg
 	}
 	c.deleteCurrentAndLastMsg(ctx, m.Chat.ID, m.MessageID, cs.LastMsgID)
-
-	newCatName := "🫆" + strings.Join(words, " ")
+	newCatName := "😇" + strings.Join(words, " ")
 	cs.TopicsConvP.Topics[newCatName] = nil
 	cs.TopicsConvP.SelectedCats = append(cs.TopicsConvP.SelectedCats, newCatName)
 	cs.TopicsConvP.CustomCatCount--
@@ -162,7 +161,6 @@ func (c *CmdHandler) handleStageAddTopicsCustomCategory(ctx context.Context, m *
 	}
 
 	cs.TopicsConvP.SelectedCats = removeCustomCats(cs.TopicsConvP.SelectedCats)
-	cs.TopicsConvP.setNextCat()
 	cs.TopicsConvP.CategoryLimit = cs.TopicsConvP.CategoryLimit - len(cs.TopicsConvP.SelectedCats)
 	c.goToAddTopicsInfoTypesStage(ctx, m, cs, addCancel(numberKeyboard(len(c.infoOptions))))
 }

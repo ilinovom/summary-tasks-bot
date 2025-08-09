@@ -8,6 +8,7 @@ import (
 	"github.com/ilinovom/summary-tasks-bot/internal/model"
 	"github.com/ilinovom/summary-tasks-bot/internal/repository"
 	"github.com/ilinovom/summary-tasks-bot/internal/service"
+	"github.com/ilinovom/summary-tasks-bot/internal/utils"
 	"github.com/ilinovom/summary-tasks-bot/pkg/telegram"
 	"log"
 	"os"
@@ -253,7 +254,7 @@ func (c *CmdHandler) sendAnswerChooseInfo(ctx context.Context, m *telegram.Messa
 }
 
 func (c *CmdHandler) sendDeleteChooseMultiCategory(ctx context.Context, m *telegram.Message, cs *ConversationState, kb [][]string) {
-	prompt := fmt.Sprintf(c.messages["prompt_choose_delete_multi"], formatOptions(getKeys(cs.TopicsConvP.Topics)))
+	prompt := fmt.Sprintf(c.messages["prompt_choose_delete_multi"], formatOptions(utils.GetSortedKeys(cs.TopicsConvP.Topics)))
 	if len(cs.TopicsConvP.SelectedCats) > 0 {
 		prompt += "\n\n" + fmt.Sprintf(c.messages["already_selected"], strings.Join(cs.TopicsConvP.SelectedCats, ", "))
 	}
@@ -265,7 +266,7 @@ func (c *CmdHandler) sendAnswerDeleteChooseCategory(ctx context.Context, m *tele
 	prompt := fmt.Sprintf(
 		c.messages["prompt_choose_category"],
 		len(cs.TopicsConvP.Topics),
-		formatOptions(getKeys(cs.TopicsConvP.Topics)),
+		formatOptions(utils.GetSortedKeys(cs.TopicsConvP.Topics)),
 	)
 
 	if len(cs.TopicsConvP.SelectedCats) > 0 {
@@ -281,7 +282,7 @@ func (c *CmdHandler) sendAnswerDeleteChooseCategory(ctx context.Context, m *tele
 }
 
 func (c *CmdHandler) sendAnswerChooseExistingMulti(ctx context.Context, m *telegram.Message, cs *ConversationState, isRepeatedCat bool, kb [][]string) {
-	prompt := fmt.Sprintf(c.messages["prompt_choose_existing_multi"], formatOptions(getKeys(cs.TopicsConvP.Topics)))
+	prompt := fmt.Sprintf(c.messages["prompt_choose_existing_multi"], formatOptions(utils.GetSortedKeys(cs.TopicsConvP.Topics)))
 	if len(cs.TopicsConvP.ToUpdateCats) > 0 {
 		prompt += "\n\n" + fmt.Sprintf(c.messages["already_selected"], strings.Join(cs.TopicsConvP.ToUpdateCats, ", "))
 	}

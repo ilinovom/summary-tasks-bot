@@ -2,7 +2,7 @@ package cmdHandlers
 
 import (
 	"fmt"
-	"sort"
+	"github.com/ilinovom/summary-tasks-bot/internal/utils"
 	"strconv"
 	"strings"
 )
@@ -137,12 +137,7 @@ func addSelectedInfo(infos []string, cs *ConversationState) {
 }
 
 func buildAlreadyChosenInfos(topics map[string][]string) string {
-	keys := make([]string, 0, len(topics))
-	for k := range topics {
-		keys = append(keys, k)
-	}
-
-	sort.Strings(keys)
+	keys := utils.GetSortedKeys(topics)
 
 	b := strings.Builder{}
 	for _, cat := range keys {
@@ -163,16 +158,6 @@ func buildAlreadyChosenInfos(topics map[string][]string) string {
 		b.WriteString("</u>]\n\t")
 	}
 	return b.String()
-}
-
-func getKeys(mapa map[string][]string) []string {
-	keys := make([]string, 0, len(mapa))
-	for k := range mapa {
-		keys = append(keys, k)
-	}
-
-	sort.Strings(keys)
-	return keys
 }
 
 func deleteKeysFromMap(mapa map[string][]string, dkeys []string) {

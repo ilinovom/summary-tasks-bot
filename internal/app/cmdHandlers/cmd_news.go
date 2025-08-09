@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/ilinovom/summary-tasks-bot/internal/model"
+	"github.com/ilinovom/summary-tasks-bot/internal/utils"
 	"log"
 	"time"
 
@@ -52,7 +53,7 @@ func (c *CmdHandler) handleGetNewsNowCommand(ctx context.Context, m *telegram.Me
 		},
 	}
 
-	setCategories := getKeys(settings.Topics)
+	setCategories := utils.GetSortedKeys(settings.Topics)
 
 	c.convs[m.Chat.ID] = conv
 	prompt := fmt.Sprintf(c.messages["prompt_choose_news_cat"], formatOptions(setCategories))
@@ -65,7 +66,7 @@ func (c *CmdHandler) continueNewsFlow(ctx context.Context, m *telegram.Message, 
 		return false
 	}
 
-	setCategories := getKeys(cs.TopicsConvP.Topics)
+	setCategories := utils.GetSortedKeys(cs.TopicsConvP.Topics)
 
 	cat := parseSelectionOne(m.Text, setCategories)
 	if cat == "" {
@@ -159,7 +160,7 @@ func (c *CmdHandler) handleGetLast24hNewsCommand(ctx context.Context, m *telegra
 	}
 
 	c.convs[m.Chat.ID] = conv
-	cats := getKeys(conv.TopicsConvP.Topics)
+	cats := utils.GetSortedKeys(conv.TopicsConvP.Topics)
 	prompt := fmt.Sprintf(c.messages["prompt_choose_last24_cat"], formatOptions(cats))
 	msgID, _ := c.sendMessage(ctx, m.Chat.ID, prompt, addCancel(numberKeyboard(len(cats))))
 	conv.LastMsgID = msgID
@@ -170,7 +171,7 @@ func (c *CmdHandler) continueLast24hFlow(ctx context.Context, m *telegram.Messag
 		return false
 	}
 
-	setCategories := getKeys(cs.TopicsConvP.Topics)
+	setCategories := utils.GetSortedKeys(cs.TopicsConvP.Topics)
 
 	cat := parseSelectionOne(m.Text, setCategories)
 	if cat == "" {

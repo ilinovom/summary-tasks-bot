@@ -168,7 +168,7 @@ func (a *App) scheduleMessages(ctx context.Context) {
 					continue
 				}
 				if len(u.Topics) == 0 {
-					a.sendMessage(ctx, u.UserID, "Вы не задали категории. Если хотите получать автоматические сообщения для расширения кругозора, то задайте темы с помощью /update_topics или же остановите автоматическую рассылку с помощью команды /stop", nil)
+					a.sendMessage(ctx, u.UserID, "Вы не задали категории. Если хотите получать автоматические сообщения для расширения кругозора, то задайте темы с помощью /add_topics или же остановите автоматическую рассылку с помощью команды /stop", nil)
 					u.LastScheduledSent = now.Unix()
 					if err := a.repo.Save(ctx, u); err != nil {
 						log.Println("save settings:", err)
@@ -178,7 +178,7 @@ func (a *App) scheduleMessages(ctx context.Context) {
 
 				msg, err := a.userService.GetNewsMultiInfo(ctx, u)
 				if err != nil {
-					log.Println("get news:", err)
+					log.Println("ERROR: get news:", err)
 					continue
 				}
 				a.sendMessage(ctx, u.UserID, msg, nil)

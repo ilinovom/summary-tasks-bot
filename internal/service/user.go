@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"github.com/ilinovom/summary-tasks-bot/internal/utils"
 	"log"
 	"math/rand"
 	"os"
@@ -110,10 +111,7 @@ func (s *UserService) GetNewsMultiInfo(ctx context.Context, u *model.UserSetting
 	if len(u.Topics) == 0 {
 		return "", errors.New("no topics")
 	}
-	cats := make([]string, 0, len(u.Topics))
-	for c := range u.Topics {
-		cats = append(cats, c)
-	}
+	cats := utils.GetSortedKeys(u.Topics)
 	sort.Strings(cats)
 	idx := u.NextCategoryIndex % len(cats)
 	category := cats[idx]

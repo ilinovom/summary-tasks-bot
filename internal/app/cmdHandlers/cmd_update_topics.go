@@ -3,6 +3,7 @@ package cmdHandlers
 import (
 	"context"
 	"fmt"
+	"github.com/ilinovom/summary-tasks-bot/internal/utils"
 	"github.com/ilinovom/summary-tasks-bot/pkg/telegram"
 	"log"
 	"strings"
@@ -121,7 +122,7 @@ func (c *CmdHandler) handleStageUpdateTopicsSelectManyExisting(ctx context.Conte
 		}
 	}
 
-	selectedCat := parseSelectionOne(m.Text, getKeys(cs.TopicsConvP.Topics))
+	selectedCat := parseSelectionOne(m.Text, utils.GetSortedKeys(cs.TopicsConvP.Topics))
 	if selectedCat == "" {
 		c.sendAnswerChooseExistingMulti(ctx, m, cs, false, addCancel(numberKeyboard(len(cs.TopicsConvP.Topics))))
 		return
@@ -220,7 +221,7 @@ func (c *CmdHandler) handleStageUpdateTopicsCustomCategory(ctx context.Context, 
 		cs.LastMsgID = msg
 	}
 	c.deleteCurrentAndLastMsg(ctx, m.Chat.ID, m.MessageID, cs.LastMsgID)
-	cs.TopicsConvP.CurrentCat = "🫆" + strings.Join(words, " ")
+	cs.TopicsConvP.CurrentCat = "😇" + strings.Join(words, " ")
 	cs.setStage(StageUpdateTopicsInfoTypes)
 	cs.TopicsConvP.SelectedInfos = nil
 	prompt := fmt.Sprintf(c.messages["prompt_choose_info"], cs.TopicsConvP.CurrentCat, cs.TopicsConvP.InfoLimit, formatOptions(c.infoOptions))
