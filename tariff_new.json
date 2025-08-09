@@ -1,0 +1,126 @@
+{
+  "base": {
+    "schedule": {
+      "time_range": "05:00-19:00",
+      "distribution": "even"
+    },
+    "limits": {
+      "topics": {
+        "category_limit": 2,
+        "info_type_limit": 2,
+        "allow_custom_category": false
+      },
+      "commands": {
+        "get_news_now_per_day": 5,
+        "get_last_24h_new_per_day": 0
+      }
+    },
+    "gpt": {
+      "get_news_now": {
+        "model": "gpt-4.1",
+        "system_prompt": "Ты — быстрый, точный и лаконичный помощник по новостям. Проверяй факты и избегай воды.",
+        "user_prompt": "Дай свежие новости по запросу: {запрос}. Без вступлений, списком, по одному предложению на факт.",
+        "max_tokens": 2048
+      },
+      "get_last_24h_news": {
+        "model": "gpt-4.1",
+        "system_prompt": "Ты — быстрый, точный и лаконичный помощник по новостям. Проверяй факты и избегай воды.",
+        "user_prompt": "Дай свежие новости по запросу: {запрос}. Без вступлений, списком, по одному предложению на факт.",
+        "max_tokens": 2048
+      }
+    }
+  },
+  "plus": {
+    "schedule": {
+      "time_range": "05:00-19:00",
+      "distribution": "even"
+    },
+    "limits": {
+      "topics": {
+        "category_limit": 4,
+        "info_type_limit": 4,
+        "allow_custom_category": true
+      },
+      "commands": {
+        "get_news_now_per_day": 10,
+        "get_last_24h_new_per_day": 4
+      }
+    },
+    "gpt": {
+      "get_news_now": {
+        "model": "gpt-4.1",
+        "system_prompt": "Ты — быстрый, точный и лаконичный помощник по новостям. Проверяй факты и избегай воды.",
+        "user_prompt": "Дай свежие новости по запросу: {запрос}. Без вступлений, списком, по одному предложению на факт.",
+        "max_tokens": 2048
+      },
+      "get_last_24h_news": {
+        "model": "gpt-4.1",
+        "system_prompt": "Ты — быстрый, точный и лаконичный помощник по новостям. Проверяй факты и избегай воды.",
+        "user_prompt": "Дай свежие новости по запросу: {запрос}. Без вступлений, списком, по одному предложению на факт.",
+        "max_tokens": 2048
+      }
+    }
+  },
+  "premium": {
+    "schedule": {
+      "time_range": "05:00-19:00",
+      "distribution": "even"
+    },
+    "limits": {
+      "topics": {
+        "category_limit": 4, 
+        "info_type_limit": 4,
+        "allow_custom_category": true
+      },
+      "commands": {
+        "get_news_now_per_day": 10,
+        "get_last_24h_new_per_day": 4
+      }
+    },
+    "gpt": {
+      "get_news_now": {
+        "model": "gpt-4.1",
+        "system_prompt": "Ты — быстрый, точный и лаконичный помощник по новостям. Проверяй факты и избегай воды.",
+        "user_prompt": "Дай свежие новости по запросу: {запрос}. Без вступлений, списком, по одному предложению на факт.",
+        "max_tokens": 2048
+      },
+      "get_last_24h_news": {
+        "model": "gpt-4.1",
+        "system_prompt": "Ты — быстрый, точный и лаконичный помощник по новостям. Проверяй факты и избегай воды.",
+        "user_prompt": "Дай свежие новости по запросу: {запрос}. Без вступлений, списком, по одному предложению на факт.",
+        "max_tokens": 2048
+      }
+    }
+  },
+  "ultimate": {
+    "schedule": {
+      "time_range": "05:00-19:00",
+      "distribution": "even"
+    },
+    "limits": {
+      "topics": {
+        "category_limit": 4,
+        "info_type_limit": 4,
+        "allow_custom_category": true
+      },
+      "commands": {
+        "get_news_now_per_day": 10,
+        "get_last_24h_new_per_day": 4
+      }
+    },
+    "gpt": {
+      "get_news_now": {
+        "model": "gpt-4.1",
+        "system_prompt": "Ты — быстрый, точный и лаконичный помощник по новостям. Проверяй факты и избегай воды.",
+        "user_prompt": "Дай свежие новости по запросу: {запрос}. Без вступлений, списком, по одному предложению на факт.",
+        "max_tokens": 2048
+      },
+      "get_last_24h_news": {
+        "model": "gpt-4.1",
+        "system_prompt": "Ты — быстрый, точный и лаконичный помощник по новостям. Проверяй факты и избегай воды.",
+        "user_prompt": "Дай свежие новости по запросу: {запрос}. Без вступлений, списком, по одному предложению на факт.",
+        "max_tokens": 2048
+      }
+    }
+  }
+}

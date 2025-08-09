@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"errors"
+	"github.com/ilinovom/summary-tasks-bot/internal/utils"
 	"log"
 	"math/rand"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/ilinovom/summary-tasks-bot/internal/config"
@@ -104,16 +106,19 @@ func (s *UserService) GetNews(ctx context.Context, u *model.UserSettings) (strin
 	return prefix + resp, nil
 }
 
-// GetNewsMultiInfo returns news for one random category with all selected info types.
+// GetNewsMultiInfo returns news cycling through categories sequentially with all selected info types.
 func (s *UserService) GetNewsMultiInfo(ctx context.Context, u *model.UserSettings) (string, error) {
 	if len(u.Topics) == 0 {
 		return "", errors.New("no topics")
 	}
-	cats := make([]string, 0, len(u.Topics))
-	for c := range u.Topics {
-		cats = append(cats, c)
+	cats := utils.GetSortedKeys(u.Topics)
+	sort.Strings(cats)
+	idx := u.NextCategoryIndex % len(cats)
+	category := cats[idx]
+	u.NextCategoryIndex = (idx + 1) % len(cats)
+	if err := s.repo.Save(ctx, u); err != nil {
+		return "", err
 	}
-	category := cats[rand.Intn(len(cats))]
 	infos := u.Topics[category]
 	t, ok := s.tariffs[u.Tariff]
 	if !ok {
