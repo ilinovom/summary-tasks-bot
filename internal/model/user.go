@@ -13,6 +13,24 @@ type UserSettings struct {
 	GetNewsNowCount   int                 `json:"get_news_now_count,omitempty"`
 	LastGetLast24h    int64               `json:"last_get_last_24h,omitempty"`
 	GetLast24hCount   int                 `json:"get_last_24h_count,omitempty"`
+	NextCategoryIndex int                 `json:"next_category_index,omitempty"`
+}
+
+// MessageSchedule stores scheduling data for a user.
+type MessageSchedule struct {
+	UserID            int64 `json:"user_id"`
+	Frequency         int   `json:"frequency,omitempty"`
+	LastScheduledSent int64 `json:"last_scheduled_sent,omitempty"`
+	NextCategoryIndex int   `json:"next_category_index,omitempty"`
+}
+
+// UserCommands stores command usage statistics for a user.
+type UserCommands struct {
+	UserID          int64 `json:"user_id"`
+	LastGetNewsNow  int64 `json:"last_get_news_now,omitempty"`
+	GetNewsNowCount int   `json:"get_news_now_count,omitempty"`
+	LastGetLast24h  int64 `json:"last_get_last_24h,omitempty"`
+	GetLast24hCount int   `json:"get_last_24h_count,omitempty"`
 }
 
 // Subscription represents a scheduled message subscription.
