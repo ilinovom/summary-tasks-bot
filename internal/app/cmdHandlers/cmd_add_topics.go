@@ -11,13 +11,13 @@ import (
 type topicsConvParams struct {
 	Topics map[string][]string // здесь хранится категория в ключе и типы информации в значении, которые выбрал юзер
 
-	CategoryLimit int      // здесь хранится всего категорий, которые доступны для выбора пользователем в рамках выполняемой команды
-	CatStep       int      // показывает какую категорию по счёту пользователь добавляет
-	CurrentCat    string   // это переменная хранит значений выбранной категории stage add/update_topics
-	OldCat        string   // здесь сохраняется категория которую мы будем обновлять в рамках /update_topics
-	AvailableCats []string //TODO перевести news на использование других и удалить
-	ToUpdateCats  []string
-	SelectedCats  []string // выбранные категории
+	CategoryLimit int    // здесь хранится всего категорий, которые доступны для выбора пользователем в рамках выполняемой команды
+	CatStep       int    // показывает какую категорию по счёту пользователь добавляет
+	CurrentCat    string // это переменная хранит значений выбранной категории stage add/update_topics
+	OldCat        string // здесь сохраняется категория которую мы будем обновлять в рамках /update_topics
+	//AvailableCats []string //TODO перевести news на использование других и удалить
+	ToUpdateCats []string
+	SelectedCats []string // выбранные категории
 
 	CustomCatCount      int
 	AllowCustomCategory bool // разрешена ли кастомная категории (тариф != base)
@@ -115,15 +115,11 @@ func (c *CmdHandler) handleAddTopicCommand(ctx context.Context, m *telegram.Mess
 			CategoryLimit:       tariff.Limits.CategoryLimit - len(settings.Topics),
 			InfoLimit:           tariff.Limits.InfoTypeLimit,
 			AllowCustomCategory: tariff.AllowCustomCategory,
-			Topics:              make(map[string][]string),
+			Topics:              settings.Topics,
 		},
 	}
 
 	conv.TopicsConvP.increaseCatStep()
-
-	for k, v := range settings.Topics {
-		conv.TopicsConvP.Topics[k] = append([]string(nil), v...)
-	}
 
 	c.convs[m.Chat.ID] = conv
 	opts := addCustomOption(c.categoryOptions, conv.TopicsConvP.AllowCustomCategory)
